@@ -1,0 +1,15 @@
+# Core
+streamlit>=1.29.0
+anthropic>=0.75.0
+python-dotenv>=1.0.0
+
+# Parsing
+pysrt>=1.1.2
+webvtt-py>=0.4.6
+
+# Utilities
+tiktoken>=0.5.2
+tenacity>=8.2.3
+
+# Dev/Testing
+pytest>=7.4.3

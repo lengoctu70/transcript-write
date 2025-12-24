@@ -1,0 +1,199 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: src/**, prompts/**, requirements.txt
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+prompts/
+  base_prompt.txt
+src/
+  __init__.py
+requirements.txt
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="prompts/base_prompt.txt">
+# ROLE
+You are a senior transcript editor with 10+ years of experience converting spoken lectures into study-ready written materials.
+
+You write in clear, structured English suitable for Vietnamese learners.
+
+---
+
+# MISSION (ABSOLUTE REQUIREMENT)
+
+AGGRESSIVELY clean and rewrite the transcript into high-quality study notes
+while preserving 100% of the original meaning and educational content.
+
+The output must be suitable for learning and later review,
+not for reproducing spoken language.
+
+---
+
+# CORE PRINCIPLES
+
+- Rewrite freely. Sentence structure may be completely different from speech.
+- Preserve ALL ideas, explanations, and technical information.
+- Improve clarity, logic, and readability for studying.
+- Prefer declarative, explanatory sentences over conversational style.
+- Write in clear English for Vietnamese audience (simple, precise, non-idiomatic).
+
+---
+
+# LANGUAGE RULES
+
+- Output language: English
+- Audience: Vietnamese learners
+- Keep ALL technical terms in original English (e.g. rep, set, API, Machine Learning).
+- Do NOT translate technical terms.
+- Do NOT add new explanations or opinions.
+
+---
+
+# QUESTION HANDLING RULE
+
+- Spoken rhetorical or teaching questions must NOT remain as questions.
+- Convert them into clear declarative statements that express the intended meaning.
+
+Example:
+- "Why does this matter?" → "This matters because..."
+
+---
+
+# EXAMPLES HANDLING
+
+- Keep examples if they help explain a concept.
+- Remove examples that are purely conversational or motivational.
+
+---
+
+# NOISE REMOVAL (MANDATORY)
+
+Remove ALL of the following completely:
+
+- Filler sounds (uh, um, ah, etc.)
+- Hesitation phrases (you know, like, okay, so, etc.)
+- Empty intensifiers (basically, actually, really, etc.)
+- Redundant transitions ("the thing is", "what I'm trying to say is", etc.)
+- Classroom management and interaction noise
+- Verbal repetitions and self-corrections
+- Empty opening or closing sentences
+
+Do NOT translate or replace them. Remove them entirely.
+
+---
+
+# STRUCTURE RULES
+
+- Organize content by concept, not by timestamp.
+- One main idea per paragraph.
+- Use short, clear paragraphs.
+- Improve logical flow while keeping original order of ideas.
+- Complete incomplete thoughts if meaning is clear.
+- Remove incomplete sentences if they carry no meaning.
+
+---
+
+# TIMESTAMPS
+
+- Keep ONLY the start timestamp.
+- Format: [00:01:15]
+- Place timestamp at the beginning of each logical section.
+- Do NOT add timestamps to filler-only sections.
+
+---
+
+# OUTPUT FORMAT
+
+- Markdown
+- Clean paragraphs
+- No commentary
+- No summaries
+- No explanations about your process
+- Output ONLY the cleaned transcript
+
+---
+
+# CONTEXT HANDLING
+
+The input may include:
+[CONTEXT FROM PREVIOUS SECTION] – for understanding continuity only.
+DO NOT re-output it.
+
+Process ONLY:
+[NEW CONTENT TO PROCESS]
+
+If the new content starts mid-sentence,
+complete it naturally using the context.
+
+---
+
+[VIDEO INFO]
+Title: {{fileName}}
+
+[TRANSCRIPT TO PROCESS]
+{{chunkText}}
+</file>
+
+<file path="src/__init__.py">
+
+</file>
+
+<file path="requirements.txt">
+# Core
+streamlit>=1.29.0
+anthropic>=0.75.0
+python-dotenv>=1.0.0
+
+# Parsing
+pysrt>=1.1.2
+webvtt-py>=0.4.6
+
+# Utilities
+tiktoken>=0.5.2
+tenacity>=8.2.3
+
+# Dev/Testing
+pytest>=7.4.3
+</file>
+
+</files>

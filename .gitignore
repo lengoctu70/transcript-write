@@ -1,0 +1,21 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Output
+output/*.md
+output/*.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+**/.DS_Store
