@@ -1,7 +1,7 @@
 # System Architecture
 
-**Version:** 1.2
-**Phase:** 3 - LLM Integration Complete
+**Version:** 1.3
+**Phase:** 4 - Validation & Output Complete
 **Last Updated:** 2025-12-25
 
 ---
@@ -268,36 +268,78 @@ def process_transcript(
 
 **Component:** `src/validator.py`
 
+**Classes:**
+- `OutputValidator` - Main validator class
+- `ValidationResult` - Aggregated validation result
+- `ValidationIssue` - Individual issue with severity
+- `ValidationSeverity` - Enum (ERROR, WARNING, INFO)
+
 **Responsibilities:**
 - Quality assurance on cleaned output
 - Detect errors and anomalies
 - Ensure content integrity
 - Provide validation reports
 
-**Validation Checks:**
-1. **Length Check** - Output within 80%-120% of input length
-2. **Content Check** - No corrupted/gibberish text
-3. **Format Check** - Valid Markdown syntax
-4. **Timestamp Check** - Correct format [HH:MM:SS]
-5. **Completeness** - No truncated chunks
+**Validation Rules:**
+1. **Filler Detection** - Warns if common fillers remain
+   - Patterns: "uh", "um", "ah", "er", "you know", "like", "okay", "so,", "basically", "actually", "really"
+   - Severity: WARNING (with context snippet)
 
-**Output:**
+2. **Context Markers** - Errors if template markers appear in output
+   - Markers: `[CONTEXT FROM PREVIOUS SECTION]`, `[NEW CONTENT TO PROCESS]`, `[VIDEO INFO]`, `[TRANSCRIPT TO PROCESS]`
+   - Severity: ERROR
+
+3. **Timestamp Format** - Validates [HH:MM:SS] or [MM:SS] format
+   - Rejects: [HH:MM:SS.mmm] (milliseconds), [H:MM] (missing leading zero)
+   - Severity: WARNING
+
+4. **Content Length** - Warns if output is too short or too long
+   - Truncation: <30% of original length (WARNING)
+   - Expansion: >120% of original length (WARNING)
+
+5. **Question Count** - Info if too many questions remain
+   - Threshold: >2 questions triggers INFO
+   - Suggests converting to declarative statements
+
+**Data Structures:**
 ```python
 @dataclass
+class ValidationIssue:
+    severity: ValidationSeverity
+    rule: str
+    message: str
+    chunk_index: Optional[int]
+    snippet: Optional[str]
+
+@dataclass
 class ValidationResult:
-    is_valid: bool
-    score: float          # 0.0-1.0
-    errors: List[str]
-    warnings: List[str]
+    issues: List[ValidationIssue]
+
+    @property
+    def has_errors(self) -> bool
+    @property
+    def has_warnings(self) -> bool
+    @property
+    def error_count(self) -> int
+    @property
+    def warning_count(self) -> int
 ```
 
-**Status:** Pending (Phase 4)
+**Key Methods:**
+- `validate_chunk(original, cleaned, chunk_index)` - Validate single chunk
+- `validate_all(processed_chunks)` - Validate all chunks and aggregate
+
+**Status:** ✓ Complete (Phase 4)
 
 ---
 
 ### 6. Processing Pipeline - Writer
 
-**Component:** `src/writer.py`
+**Component:** `src/markdown_writer.py`
+
+**Classes:**
+- `MarkdownWriter` - Main writer class
+- `TranscriptMetadata` - Metadata for output
 
 **Responsibilities:**
 - Format cleaned chunks into final Markdown
@@ -307,72 +349,103 @@ class ValidationResult:
 
 **Output Format:**
 ```markdown
-# Cleaned Transcript: [filename]
+# Video Title
 
-**Cleaned:** 2025-12-24 10:30:00
-**Original Duration:** 45 minutes
-**Chunks Processed:** 8
-**Estimated Cost:** $0.12
+**Processed:** 2025-12-25
+**Model:** claude-3-5-sonnet-20241022
+**Cost:** $0.0150
+**Duration:** 00:10:30
 
 ---
 
-## [Section Name]
-
-[00:01:15]
-
+[00:00:00]
 Clean, well-structured content here...
 
+[00:05:00]
 More content organized by concept...
+```
+
+**Metadata JSON Structure:**
+```json
+{
+  "title": "Video Title",
+  "original_duration": "00:10:30",
+  "processed_at": "2025-12-25T10:30:00",
+  "model": "claude-3-5-sonnet-20241022",
+  "cost_usd": 0.015,
+  "chunks_processed": 3,
+  "tokens": {
+    "input": 1500,
+    "output": 1200,
+    "total": 2700
+  }
+}
 ```
 
 **Features:**
 - Markdown-formatted output
-- Readable structure and hierarchy
-- Timestamps at logical section starts
 - Metadata header with processing info
+- Sanitized filenames from titles
+- Preview generation for Streamlit
+- Dual output: .md + -metadata.json
 
-**Status:** Pending (Phase 4)
+**Key Methods:**
+- `write(processed_chunks, title, summary, duration)` - Write files
+- `_build_markdown(chunks, metadata)` - Build markdown content
+- `_sanitize_filename(title)` - Create safe filename
+- `get_content_for_preview(chunks, max_chars)` - Generate preview
+
+**Status:** ✓ Complete (Phase 4)
 
 ---
 
 ### 7. Utility - Cost Estimation
 
-**Component:** Integrated in `src/llm_processor.py`
+**Component:** `src/cost_estimator.py`
+
+**Classes:**
+- `CostEstimator` - Main estimator class
+- `CostBreakdown` - Cost breakdown dataclass
 
 **Responsibilities:**
-- Calculate API costs per processed chunk
-- Track token usage per request
-- Provide summary with total costs
-- Support multiple model pricing tiers
+- Calculate API costs before processing
+- Estimate token usage with tiktoken
+- Provide cost breakdown per chunk
+- Estimate processing time
 
-**Cost Calculation:**
+**Pricing Models (per 1K tokens, Dec 2024):**
 ```python
-# Per-chunk calculation
-cost = (input_tokens / 1000) * prices["input"] +
-       (output_tokens / 1000) * prices["output"]
+PRICING = {
+    "claude-3-5-sonnet-20241022": {"input": 0.003, "output": 0.015},
+    "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+}
 
-# Summary totals
-total_input = sum(r.input_tokens for r in results)
-total_output = sum(r.output_tokens for r in results)
-total_cost = sum(r.cost for r in results)
-```
-
-**Current Pricing (per 1K tokens, Dec 2024):**
-- claude-3-5-sonnet-20241022: Input $0.003, Output $0.015
-- claude-3-5-haiku-20241022: Input $0.001, Output $0.005
-
-**Summary Output:**
-```python
-{
-    "chunks_processed": len(results),
-    "total_input_tokens": total_input,
-    "total_output_tokens": total_output,
-    "total_cost": round(total_cost, 4),
-    "model": model
+TIME_PER_CHUNK = {
+    "claude-3-5-sonnet-20241022": 5,  # seconds
+    "claude-3-5-haiku-20241022": 3
 }
 ```
 
-**Status:** ✓ Complete (Phase 3)
+**CostBreakdown Dataclass:**
+```python
+@dataclass
+class CostBreakdown:
+    input_tokens: int
+    output_tokens_est: int
+    input_cost: float
+    output_cost: float
+    total_cost: float
+    chunks: int
+    processing_time_minutes: float
+```
+
+**Key Methods:**
+- `count_tokens(text)` - Count using tiktoken (fallback: char/4)
+- `estimate_chunk_tokens(chunk_text, prompt_template)` - Per chunk estimate
+- `estimate_total(chunks, prompt_template)` - Total cost estimate
+- `format_estimate(breakdown)` - Format for display
+
+**Status:** ✓ Complete (Phase 4)
 
 ---
 
@@ -431,7 +504,9 @@ User Input (File)
                            │
                            ▼
                       Output File
-                      + Cost Report
+                      {Title-TIMESTAMP.md}
+                      + Metadata JSON
+                      {Title-TIMESTAMP-metadata.json}
 ```
 
 ---
@@ -449,10 +524,13 @@ LLM Processor
   └── depends on: Anthropic SDK, tenacity, base_prompt.txt, Chunker
 
 Validator
-  └── depends on: (minimal)
+  └── depends on: re (built-in), dataclasses (built-in)
 
-Writer
-  └── depends on: pathlib, Validator
+Markdown Writer
+  └── depends on: pathlib, json (built-in), datetime (built-in)
+
+Cost Estimator
+  └── depends on: tiktoken (optional, with fallback)
 
 Streamlit UI
   └── depends on: streamlit, all above modules

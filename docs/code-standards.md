@@ -210,36 +210,78 @@ def process_transcript(
 ### 4. Validator Module (`src/validator.py`)
 **Purpose:** Quality assurance on cleaned output
 
+**Classes:**
+- `OutputValidator` - Main validator class
+- `ValidationResult` - Aggregated validation result
+- `ValidationIssue` - Individual issue with severity
+- `ValidationSeverity` - Enum (ERROR, WARNING, INFO)
+
 **Checks:**
-- Length deviation < 20% from original
-- No API errors or truncation
-- Content coherence (no gibberish)
-- Timestamp format correctness
+- Filler word detection (uh, um, like, basically, etc.)
+- Context marker detection (template markers shouldn't appear in output)
+- Timestamp format validation ([HH:MM:SS] or [MM:SS])
+- Content length ratio (warn if <30% or >120% of original)
+- Question count (info if >2 questions)
+
+**Severity Levels:**
+- ERROR: Context markers in output
+- WARNING: Filler words, excessive truncation/expansion
+- INFO: Many questions detected
 
 **Key Functions:**
-- `validate_output(original: str, cleaned: str) -> ValidationResult`
+- `validate_chunk(original: str, cleaned: str, chunk_index: int) -> List[ValidationIssue]`
+- `validate_all(processed_chunks: list) -> ValidationResult`
 
-### 5. Writer Module (`src/writer.py`)
+### 5. Writer Module (`src/markdown_writer.py`)
 **Purpose:** Generate final Markdown output
+
+**Classes:**
+- `MarkdownWriter` - Main writer class
+- `TranscriptMetadata` - Metadata for output
 
 **Features:**
 - Format timestamps correctly
 - Organize content by concept
-- Add metadata (timestamp, cost, status)
+- Add metadata (processed date, model, cost, duration)
+- Sanitize filenames from titles
+- Generate preview for Streamlit
+
+**Output Files:**
+- `{sanitized_title}-{timestamp}.md` - Markdown transcript
+- `{sanitized_title}-{timestamp}-metadata.json` - Metadata JSON
 
 **Key Functions:**
-- `write_markdown(chunks: List[str], output_path: str) -> None`
+- `write(processed_chunks: list, title: str, summary: dict, duration: Optional[str]) -> tuple[Path, Path]`
+- `_build_markdown(chunks: list, metadata: TranscriptMetadata) -> str`
+- `_sanitize_filename(title: str) -> str`
+- `get_content_for_preview(chunks: list, max_chars: int = 5000) -> str`
 
-### 6. Estimator Module (`src/estimator.py`)
-**Purpose:** Calculate API costs
+### 6. Cost Estimator Module (`src/cost_estimator.py`)
+**Purpose:** Estimate API costs before processing
 
-**Calculation:**
-- Input tokens: number of tokens in prompt + chunk
-- Output tokens: estimated based on chunk size (~1.3x reduction)
-- Cost: based on current Claude pricing
+**Classes:**
+- `CostEstimator` - Main estimator class
+- `CostBreakdown` - Cost breakdown dataclass
+
+**Features:**
+- Token counting with tiktoken (fallback to char/4)
+- Support for multiple Claude models
+- Processing time estimation
+- Cost breakdown per chunk and total
+
+**Pricing Models (per 1K tokens, Dec 2024):**
+```python
+PRICING = {
+    "claude-3-5-sonnet-20241022": {"input": 0.003, "output": 0.015},
+    "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005}
+}
+```
 
 **Key Functions:**
-- `estimate_cost(content: str) -> CostEstimate`
+- `count_tokens(text: str) -> int`
+- `estimate_chunk_tokens(chunk_text: str, prompt_template: str) -> tuple[int, int]`
+- `estimate_total(chunks: list, prompt_template: str) -> CostBreakdown`
+- `format_estimate(breakdown: CostBreakdown) -> str`
 
 ---
 

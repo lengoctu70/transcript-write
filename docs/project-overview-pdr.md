@@ -2,8 +2,8 @@
 
 ## Project: Transcript Cleaner MVP
 
-**Version:** 0.3.0
-**Phase:** 3 - LLM Integration Complete
+**Version:** 0.4.0
+**Phase:** 4 - Validation & Output Complete
 **Last Updated:** 2025-12-25
 
 ---
@@ -12,7 +12,7 @@
 
 Transcript Cleaner is an automated tool that transforms raw lecture transcripts into structured, study-ready materials for Vietnamese learners of English. The tool cleans, rewrites, and organizes spoken content into professional study notes while preserving 100% of original meaning.
 
-**Status:** Phase 3 Complete - LLM integration with retry logic, cost calculation, and 100% test coverage.
+**Status:** Phase 4 Complete - Validation, output generation, and cost estimation fully implemented with 100% test coverage.
 
 ---
 
@@ -142,7 +142,7 @@ See `system-architecture.md` for detailed architecture.
 | **1** | Setup & Dependencies | ✓ Complete | requirements.txt, .env.example, .gitignore, src structure, base prompt |
 | **2** | Parsing & Chunking | ✓ Complete | Parser module, Chunker module, tests |
 | **3** | LLM Integration | ✓ Complete | Claude API integration, retry logic, cost tracking, tests |
-| **4** | Validation & Output | Pending | Quality validator, Markdown writer |
+| **4** | Validation & Output | ✓ Complete | Quality validator, Markdown writer, cost estimator, tests |
 | **5** | Streamlit UI | Pending | Web interface, file uploads, previews |
 | **6** | Testing & Polish | Pending | Unit tests, integration tests, documentation |
 
@@ -150,7 +150,7 @@ See `system-architecture.md` for detailed architecture.
 
 ## Success Criteria
 
-### Phase 1-3 (Complete)
+### Phase 1-4 (Complete)
 - [x] Directory structure created and organized
 - [x] requirements.txt with correct versions
 - [x] .env.example with placeholder for API key
@@ -161,7 +161,10 @@ See `system-architecture.md` for detailed architecture.
 - [x] LLMProcessor with Claude API integration (Phase 3)
 - [x] Retry logic with tenacity (Phase 3)
 - [x] Cost calculation per request (Phase 3)
-- [x] Comprehensive test suite (30 tests, Phase 3)
+- [x] OutputValidator with rule-based validation (Phase 4)
+- [x] MarkdownWriter with metadata support (Phase 4)
+- [x] CostEstimator with tiktoken integration (Phase 4)
+- [x] Comprehensive test suite (94 tests, Phase 4)
 
 ### Overall MVP
 - Process transcript files in multiple formats
@@ -207,8 +210,8 @@ pip install -r requirements.txt
 
 ## Notes for Development Teams
 
-- Phase 4 begins with implementing the Validator module
+- Phase 5 begins with implementing the Streamlit UI
 - All modules should follow patterns in `code-standards.md`
 - API integration uses tenacity for robust retry handling (Phase 3 complete)
-- Cost tracking integrated in llm_processor module (Phase 3 complete)
-- Test coverage: 30 passing tests, 100% for llm_processor
+- Cost tracking integrated in cost_estimator module (Phase 4 complete)
+- Test coverage: 94 passing tests, 100% for Phase 4 modules

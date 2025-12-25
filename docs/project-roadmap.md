@@ -1,8 +1,8 @@
 # Transcript Cleaner MVP - Project Roadmap
 
 **Project Start:** 2025-12-24
-**Current Version:** v0.3.0-dev
-**Last Updated:** 2025-12-25 00:37
+**Current Version:** v0.4.0-dev
+**Last Updated:** 2025-12-25 07:01
 
 ---
 
@@ -20,7 +20,7 @@ Build a Streamlit-based tool to convert English lecture transcripts (SRT/VTT) in
 
 ---
 
-## Project Status: 50% Complete
+## Project Status: 67% Complete
 
 ### Progress Summary
 
@@ -29,11 +29,11 @@ Build a Streamlit-based tool to convert English lecture transcripts (SRT/VTT) in
 | Phase 1: Setup | DONE | 100% | 2025-12-24 22:49 | ~1h |
 | Phase 2: Parsing & Chunking | DONE | 100% | 2025-12-24 23:32 | ~2.5h |
 | Phase 3: LLM Integration | DONE | 100% | 2025-12-25 00:37 | ~3h |
-| Phase 4: Validation & Output | IN-PROGRESS | 0% | - | 0h |
+| Phase 4: Validation & Output | DONE | 100% | 2025-12-25 07:01 | ~2h |
 | Phase 5: Streamlit UI | PENDING | 0% | - | 0h |
 | Phase 6: Testing & Polish | PENDING | 0% | - | 0h |
 
-**Overall Progress: 3/6 phases complete (50%)**
+**Overall Progress: 4/6 phases complete (67%)**
 
 ---
 
@@ -43,7 +43,7 @@ Build a Streamlit-based tool to convert English lecture transcripts (SRT/VTT) in
 Week 1 (Dec 24-25, 2025)
   Day 1: Setup + Parsing + Chunking     [DONE]
   Day 2: LLM Integration                [DONE]
-  Day 3: Validation & Output            [IN-PROGRESS]
+  Day 3: Validation & Output            [DONE]
   Day 4-5: Streamlit UI + Testing       [PENDING]
 
 Target Launch: Dec 27-28, 2025
@@ -130,18 +130,29 @@ Target Launch: Dec 27-28, 2025
 
 ---
 
-### Phase 4: Validation & Output [IN-PROGRESS]
-**Started:** 2025-12-25 00:37
-**Estimated:** 2 hours
+### Phase 4: Validation & Output [DONE]
+**Completion:** 2025-12-25 07:01
 
-**Pending Tasks:**
-- [ ] Implement rule-based validator
-- [ ] Create markdown writer
-- [ ] Add cost estimator utility
-- [ ] Write tests for validator
-- [ ] Write tests for markdown writer
+**Deliverables:**
+- Rule-based validator for LLM output quality
+- Markdown writer with metadata export
+- Cost estimator for pre-processing estimates
+- Updated src/__init__.py exports
 
-**Dependencies:** Phase 3 complete
+**Files:**
+- `src/validator.py` (257 lines) - Rule-based validation
+- `src/markdown_writer.py` (157 lines) - Markdown + JSON output
+- `src/cost_estimator.py` (157 lines) - Token counting + cost estimation
+
+**Success Criteria:**
+- [x] Validator catches fillers, context markers, truncation
+- [x] MarkdownWriter produces clean output with metadata
+- [x] CostEstimator provides accurate pre-processing estimate
+- [x] All modules importable from src package
+- [x] Output files saved to output/ directory
+- [x] Metadata JSON contains all relevant stats
+
+**Report:** `plans/reports/project-manager-251225-0701-phase4-completion.md`
 
 ---
 
@@ -191,9 +202,9 @@ transcript_write/
 │   ├── transcript_parser.py        # DONE (123 lines)
 │   ├── chunker.py                  # DONE (123 lines)
 │   ├── llm_processor.py            # DONE (249 lines)
-│   ├── validator.py                # [PENDING]
-│   ├── markdown_writer.py          # [PENDING]
-│   └── cost_estimator.py           # [PENDING]
+│   ├── validator.py                # DONE (257 lines)
+│   ├── markdown_writer.py          # DONE (157 lines)
+│   └── cost_estimator.py           # DONE (157 lines)
 │
 ├── prompts/
 │   └── base_prompt.txt             # [PENDING]
@@ -203,7 +214,9 @@ transcript_write/
 │   ├── test_parser.py              # DONE (77 lines)
 │   ├── test_chunker.py             # DONE (150 lines)
 │   ├── test_llm_processor.py       # DONE (243 lines)
-│   ├── test_validator.py           # [PENDING]
+│   ├── test_validator.py           # DONE (294 lines)
+│   ├── test_writer.py              # DONE (479 lines)
+│   ├── test_cost_estimator.py      # DONE (355 lines)
 │   └── fixtures/
 │       └── sample.srt              # DONE
 │
@@ -214,21 +227,48 @@ transcript_write/
 │       ├── phase-01-setup.md       # DONE
 │       ├── phase-02-parsing-chunking.md  # DONE
 │       ├── phase-03-llm-integration.md   # DONE
-│       ├── phase-04-validation-output.md # PENDING
+│       ├── phase-04-validation-output.md # DONE
 │       ├── phase-05-streamlit-ui.md      # PENDING
 │       └── phase-06-testing-polish.md    # PENDING
 │
 └── docs/
-    ├── project-overview-pdr.md     # DONE
-    ├── code-standards.md           # DONE
-    ├── codebase-summary.md         # [UPDATE NEEDED]
-    ├── system-architecture.md      # [UPDATE NEEDED]
+    ├── project-overview-pdr.md     # DONE (Phase 4)
+    ├── code-standards.md           # DONE (Phase 4)
+    ├── codebase-summary.md         # DONE (Phase 4)
+    ├── system-architecture.md      # DONE (Phase 4)
     └── project-roadmap.md          # THIS FILE
 ```
 
 ---
 
 ## Changelog
+
+### v0.4.0-dev (2025-12-25 07:01)
+**Phase 4 Complete: Validation & Output**
+
+**Added:**
+- `src/validator.py` - Rule-based validation for LLM output quality
+- `src/markdown_writer.py` - Markdown + JSON metadata export
+- `src/cost_estimator.py` - Token counting and cost estimation
+- Updated `src/__init__.py` with new module exports
+
+**Features:**
+- Filler word detection (uh, um, like, you know, etc.)
+- Context marker detection (prevents prompt leakage)
+- Timestamp format validation
+- Content length ratio checks
+- Markdown output with metadata header
+- JSON metadata export (cost, tokens, timestamp)
+- Pre-processing cost estimation with tiktoken
+- Processing time estimates per model
+
+**Code Stats:**
+- validator.py: 257 lines
+- markdown_writer.py: 157 lines
+- cost_estimator.py: 157 lines
+- Total Phase 4: 571 lines
+
+---
 
 ### v0.3.0-dev (2025-12-25 00:37)
 **Phase 3 Complete: LLM Integration**
@@ -324,8 +364,8 @@ transcript_write/
 
 ## Next Steps (Priority Order)
 
-1. [IMMEDIATE] Complete Phase 4: Validation & Output
-2. [HIGH] Build Phase 5: Streamlit UI
+1. [IMMEDIATE] Build Phase 5: Streamlit UI
+2. [HIGH] Create prompt template (prompts/base_prompt.txt)
 3. [MEDIUM] Phase 6: Testing & Polish
 4. [LOW] Apply code review medium-priority fixes
 5. [LOW] Update documentation (codebase-summary.md, system-architecture.md)
@@ -335,22 +375,22 @@ transcript_write/
 ## Metrics Dashboard
 
 ### Development Velocity
-- **Phases Completed:** 3/6 (50%)
-- **Time Spent:** ~6.5 hours
-- **Remaining:** ~7.5 hours
+- **Phases Completed:** 4/6 (67%)
+- **Time Spent:** ~8.5 hours
+- **Remaining:** ~5.5 hours
 - **On Track:** YES (targeting Dec 27-28 launch)
 
 ### Code Quality
-- **Total Tests:** 21
-- **Tests Passing:** 21 (100%)
-- **Overall Coverage:** 85%
+- **Total Tests:** 94
+- **Tests Passing:** 94 (100%)
+- **Overall Coverage:** 100% (Phase 4 modules)
 - **Critical Issues:** 0
 - **High Priority Issues:** 0
 
 ### Feature Completeness
-- **Core Features:** 50% (3/6 phases)
+- **Core Features:** 67% (4/6 phases)
 - **UI Components:** 0%
-- **Documentation:** 40% (base docs done, updates needed)
+- **Documentation:** 100% (all docs updated for Phase 4)
 
 ---
 
@@ -362,4 +402,4 @@ transcript_write/
 
 ---
 
-*Last updated: 2025-12-25 00:37 by project-manager subagent*
+*Last updated: 2025-12-25 07:01 by project-manager subagent*
