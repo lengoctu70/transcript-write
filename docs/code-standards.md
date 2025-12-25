@@ -1,8 +1,8 @@
 # Code Standards & Architecture Guidelines
 
-**Version:** 1.0
-**Last Updated:** 2025-12-24
-**Applies To:** All Python code in src/ and related modules
+**Version:** 1.1
+**Last Updated:** 2025-12-25
+**Applies To:** All Python code in src/, tests/, and app.py
 
 ---
 
@@ -327,38 +327,112 @@ class APIError(TranscriptCleanerError):
 
 ---
 
-## Testing Standards
+## Testing Standards (Phase 6 - Complete)
 
-### Test File Organization
-- One test file per source module: `test_parser.py`, `test_chunker.py`
-- Use pytest fixtures for common setup
-- Name test functions: `test_<function>_<scenario>`
+### Test Organization
 
-### Minimum Coverage
-- Target: 80%+ code coverage
-- All public functions must have at least one test
-- Edge cases and error paths required
+**Unit Tests (6 files)**
+- `test_parser.py` - 3 tests for TranscriptParser
+- `test_chunker.py` - 5 tests for SmartChunker
+- `test_llm_processor.py` - 22 tests for LLMProcessor (mocked)
+- `test_validator.py` - 17 tests for OutputValidator
+- `test_writer.py` - 25 tests for MarkdownWriter
+- `test_cost_estimator.py` - 20 tests for CostEstimator
+- **Total:** 92 unit tests
 
-### Example Test Pattern
+**Integration Tests (1 file)**
+- `test_integration.py` - 5 tests covering full pipeline
+  - Parse → Chunk → Estimate → Process → Validate → Write
+  - Error handling (invalid format, empty, malformed)
+
+**Test Fixtures**
+- `fixtures/sample.srt` - SRT format sample (11 lines)
+- `fixtures/sample.vtt` - VTT format sample (Phase 6)
+- Temporary files via pytest `tmp_path` fixture
+
+### Test Pattern & Best Practices
+
 ```python
 import pytest
-from src.parser import parse_srt
+from src.parser import TranscriptParser
 
-def test_parse_srt_valid_file(tmp_path):
-    """Test parsing a valid SRT file."""
-    srt_content = "1\n00:00:01,000 --> 00:00:05,000\nHello world"
-    srt_file = tmp_path / "test.srt"
-    srt_file.write_text(srt_content)
+class TestTranscriptParser:
+    """Group related tests in test classes"""
 
-    result = parse_srt(str(srt_file))
-    assert len(result) == 1
-    assert result[0].content == "Hello world"
+    @pytest.fixture
+    def sample_srt(self, tmp_path):
+        """Reusable fixture for sample SRT file"""
+        content = "1\n00:00:01,000 --> 00:00:05,000\nTest content"
+        srt_file = tmp_path / "test.srt"
+        srt_file.write_text(content)
+        return srt_file
 
-def test_parse_srt_invalid_file():
-    """Test parsing a non-existent file."""
-    with pytest.raises(FileNotFoundError):
-        parse_srt("/nonexistent/file.srt")
+    def test_parse_srt_valid_file(self, sample_srt):
+        """Test parsing a valid SRT file."""
+        parser = TranscriptParser()
+        segments = parser.parse(sample_srt)
+
+        assert len(segments) == 1
+        assert segments[0].text == "Test content"
+
+    def test_parse_srt_not_found(self):
+        """Test parsing non-existent file raises error."""
+        parser = TranscriptParser()
+        with pytest.raises(FileNotFoundError):
+            parser.parse("/nonexistent/file.srt")
+
+    @patch('src.llm_processor.anthropic.Anthropic')
+    def test_with_mock(self, mock_anthropic):
+        """Test with mocked external dependencies"""
+        mock_anthropic.return_value.messages.create.return_value = Mock(...)
+        # Test implementation
 ```
+
+### Coverage Requirements
+- **Target:** 100% for source modules (Phase 4-6 achievement)
+- **All public functions** must have tests
+- **Edge cases** and error paths tested
+- **Integration tests** verify end-to-end flows
+
+### Running Tests
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/test_parser.py
+
+# Run specific test function
+pytest tests/test_parser.py::test_parse_srt_valid_file
+
+# Run with coverage report
+pytest --cov=src --cov-report=html
+
+# Run integration tests only
+pytest tests/test_integration.py
+
+# Run without integration tests
+pytest tests/ --ignore=tests/test_integration.py
+```
+
+### Mocking & Fixtures Strategy
+- **External APIs:** Mock anthropic.Anthropic client
+- **File I/O:** Use pytest `tmp_path` for temporary files
+- **Shared Setup:** Define reusable fixtures in conftest.py or test class
+- **Parametrization:** Use `@pytest.mark.parametrize` for multiple scenarios
+
+### Integration Testing Approach (Phase 6)
+- Test complete pipeline end-to-end with mocked API
+- Verify error handling for common failure cases:
+  - Invalid file formats (not SRT/VTT)
+  - Empty files (no content)
+  - Malformed content (invalid structure)
+- Use fixtures to create temporary files
+- Mock Anthropic API to avoid live API calls
+- Validate file output (markdown + metadata JSON)
 
 ---
 

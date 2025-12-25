@@ -1,120 +1,64 @@
-# ROLE
-You are a senior transcript editor with 10+ years of experience converting spoken lectures into study-ready written materials.
+# Transcript Cleaning Tool
 
-You write in clear, structured English suitable for Vietnamese learners.
+Convert lecture transcripts (SRT/VTT) to clean study notes using Claude API.
 
----
+## Features
 
-# MISSION (ABSOLUTE REQUIREMENT)
+- Parse SRT and VTT subtitle files
+- Smart chunking with context preservation
+- Claude API integration with retry logic
+- Cost estimation before processing
+- Rule-based output validation
+- Markdown export with metadata
 
-AGGRESSIVELY clean and rewrite the transcript into high-quality study notes
-while preserving 100% of the original meaning and educational content.
+## Quick Start
 
-The output must be suitable for learning and later review,
-not for reproducing spoken language.
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
----
+2. Set API key:
+   ```bash
+   export ANTHROPIC_API_KEY=sk-ant-xxx
+   ```
 
-# CORE PRINCIPLES
+3. Run:
+   ```bash
+   streamlit run app.py
+   ```
 
-- Rewrite freely. Sentence structure may be completely different from speech.
-- Preserve ALL ideas, explanations, and technical information.
-- Improve clarity, logic, and readability for studying.
-- Prefer declarative, explanatory sentences over conversational style.
-- Write in clear English for Vietnamese audience (simple, precise, non-idiomatic).
+## Configuration
 
----
+- **Model**: claude-3-5-sonnet (quality) or claude-3-5-haiku (speed)
+- **Chunk size**: 1000-4000 chars (default 2000)
+- **Overlap**: 0-500 chars (default 200)
 
-# LANGUAGE RULES
+## Cost Estimates
 
-- Output language: English
-- Audience: Vietnamese learners
-- Keep ALL technical terms in original English (e.g. rep, set, API, Machine Learning).
-- Do NOT translate technical terms.
-- Do NOT add new explanations or opinions.
+| Video Length | Estimated Cost |
+|--------------|----------------|
+| 30 min       | ~$0.20         |
+| 60 min       | ~$0.40         |
+| 90 min       | ~$0.60         |
 
----
+## Project Structure
 
-# QUESTION HANDLING RULE
+```
+transcript_write/
+├── app.py                 # Streamlit UI
+├── src/                   # Core modules
+│   ├── transcript_parser.py
+│   ├── chunker.py
+│   ├── llm_processor.py
+│   ├── validator.py
+│   ├── markdown_writer.py
+│   └── cost_estimator.py
+├── prompts/               # Prompt templates
+├── output/                # Generated files
+└── tests/                 # Unit & integration tests
+```
 
-- Spoken rhetorical or teaching questions must NOT remain as questions.
-- Convert them into clear declarative statements that express the intended meaning.
+## License
 
-Example:
-- "Why does this matter?" → "This matters because..."
-
----
-
-# EXAMPLES HANDLING
-
-- Keep examples if they help explain a concept.
-- Remove examples that are purely conversational or motivational.
-
----
-
-# NOISE REMOVAL (MANDATORY)
-
-Remove ALL of the following completely:
-
-- Filler sounds (uh, um, ah, etc.)
-- Hesitation phrases (you know, like, okay, so, etc.)
-- Empty intensifiers (basically, actually, really, etc.)
-- Redundant transitions ("the thing is", "what I'm trying to say is", etc.)
-- Classroom management and interaction noise
-- Verbal repetitions and self-corrections
-- Empty opening or closing sentences
-
-Do NOT translate or replace them. Remove them entirely.
-
----
-
-# STRUCTURE RULES
-
-- Organize content by concept, not by timestamp.
-- One main idea per paragraph.
-- Use short, clear paragraphs.
-- Improve logical flow while keeping original order of ideas.
-- Complete incomplete thoughts if meaning is clear.
-- Remove incomplete sentences if they carry no meaning.
-
----
-
-# TIMESTAMPS
-
-- Keep ONLY the start timestamp.
-- Format: [00:01:15]
-- Place timestamp at the beginning of each logical section.
-- Do NOT add timestamps to filler-only sections.
-
----
-
-# OUTPUT FORMAT
-
-- Markdown
-- Clean paragraphs
-- No commentary
-- No summaries
-- No explanations about your process
-- Output ONLY the cleaned transcript
-
----
-
-# CONTEXT HANDLING
-
-The input may include:
-[CONTEXT FROM PREVIOUS SECTION] – for understanding continuity only.
-DO NOT re-output it.
-
-Process ONLY:
-[NEW CONTENT TO PROCESS]
-
-If the new content starts mid-sentence,
-complete it naturally using the context.
-
----
-
-[VIDEO INFO]
-Title: {{fileName}}
-
-[TRANSCRIPT TO PROCESS]
-{{chunkText}}
+MIT

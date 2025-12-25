@@ -1,7 +1,7 @@
 # System Architecture
 
-**Version:** 1.3
-**Phase:** 4 - Validation & Output Complete
+**Version:** 1.5
+**Phase:** 6 - Testing & Polish Complete
 **Last Updated:** 2025-12-25
 
 ---
@@ -451,23 +451,59 @@ class CostBreakdown:
 
 ### 8. Presentation Layer - Streamlit UI
 
-**Component:** `app.py` (TBD - Phase 5)
+**Component:** `app.py` (Phase 5, Phase 6 Enhanced)
 
 **Responsibilities:**
-- User interface for file upload
-- Progress display during processing
+- File upload and selection
+- Model and chunking configuration
+- Cost estimation and approval
+- Progress tracking during processing
 - Results preview and download
-- Cost summary display
+- Error handling and reporting
+
+**Error Handling Wrapper (`safe_process`)**
+
+Wraps LLM processing with user-friendly error messages:
+
+```python
+def safe_process(func):
+    """Convert technical errors to user-friendly messages"""
+    try:
+        return func()
+    except AuthenticationError:
+        # Invalid API key
+        st.error("❌ Invalid API key. Check your Anthropic API key.")
+    except RateLimitError:
+        # Hit rate limits
+        st.error("⏳ Rate limit reached. Please wait a moment and try again.")
+    except APIConnectionError:
+        # Network issues
+        st.error("🌐 Network error. Check your internet connection.")
+    except Exception:
+        # Unknown error with debug details
+        st.error("❌ Unexpected error")
+        st.expander("Error details"):
+            st.code(traceback.format_exc())
+```
+
+**Error Detection Strategy:**
+- Catch exceptions from LLM processing function
+- Check exception type name (works even if anthropic not imported)
+- Provide specific guidance for common errors
+- Show full traceback in expandable debug section
 
 **User Workflow:**
-1. User uploads SRT/VTT/TXT file
-2. System estimates cost
-3. User confirms or cancels
-4. Processing starts with progress bar
-5. Results displayed with download option
-6. Cost summary shown
+1. User uploads SRT/VTT file
+2. System parses and chunks transcript
+3. Cost estimation displayed with breakdown
+4. User enters API key and confirms
+5. Processing starts with progress bar
+6. Validation results displayed (errors/warnings/info)
+7. Markdown and metadata saved to output/
+8. Download buttons provided for both files
+9. Error handling with specific messages for common failures
 
-**Status:** Pending (Phase 5)
+**Status:** ✓ Complete (Phase 6)
 
 ---
 
@@ -538,23 +574,51 @@ Streamlit UI
 
 ---
 
-## Error Handling Strategy
+## Error Handling Strategy (Phase 6 Enhanced)
+
+### Multi-Layer Error Handling
+
+**Layer 1: LLM Processor Retry Logic (via tenacity)**
+- Retries transient API errors automatically
+- Max 3 attempts with exponential backoff
+- Retries on: RateLimitError, APIConnectionError, InternalServerError
+- Backoff: 1s → 2s → 4s → up to 10s
+
+**Layer 2: Integration Tests (test_integration.py)**
+- Tests error conditions: invalid format, empty files, malformed input
+- Validates error handling behavior end-to-end
+- Ensures graceful degradation for edge cases
+
+**Layer 3: UI Error Wrapper (app.py - safe_process)**
+- Wraps user-facing processing functions
+- Converts technical errors to user-friendly messages
+- Provides specific guidance for common failures
+- Shows debug details in expandable section
 
 ### Error Hierarchy
 ```
-TranscriptCleanerError (base)
-  ├── ParsingError
-  ├── ChunkingError
-  ├── APIError (with retry logic)
-  ├── ValidationError
-  └── WriterError
+Python/Anthropic Exceptions
+  ├── AuthenticationError → "Invalid API key"
+  ├── RateLimitError → "Rate limit, wait and retry"
+  ├── APIConnectionError → "Network issue"
+  └── Exception → "Unexpected error with traceback"
 ```
 
-### Retry Policy
-- **Automatic Retries:** API errors only (via tenacity)
-- **Manual Retries:** User-triggered for validation failures
-- **Max Attempts:** 3 for API calls
-- **Backoff:** Exponential (2^n seconds)
+### Error Recovery Paths
+| Error Type | Detection | User Message | Recovery |
+|------------|-----------|--------------|----------|
+| Invalid API Key | AuthenticationError | Check your API key | Update key and retry |
+| Rate Limit | RateLimitError | Wait and retry later | Auto-retry or manual retry |
+| Network Issue | APIConnectionError | Check internet connection | Retry on new connection |
+| Malformed Input | ValueError (parser) | Check file format | Select different file |
+| Empty File | Empty segments list | File contains no content | Choose valid file |
+| Unknown Error | Generic Exception | Show full traceback | Check error details |
+
+### Validation Error Handling
+- **Errors:** Context markers in output (should never happen)
+- **Warnings:** Filler words remaining, content expansion/truncation
+- **Info:** High question count (informational only)
+- All validation issues displayed in expandable UI section
 
 ---
 
@@ -589,18 +653,57 @@ TranscriptCleanerError (base)
 
 ---
 
+## Testing & Quality Assurance (Phase 6)
+
+### Unit Tests Coverage
+- **test_parser.py:** 3 tests (parser functionality)
+- **test_chunker.py:** 5 tests (chunking strategy)
+- **test_llm_processor.py:** 22 tests (API integration, mocked)
+- **test_validator.py:** 17 tests (validation rules)
+- **test_writer.py:** 25 tests (markdown generation)
+- **test_cost_estimator.py:** 20 tests (token counting, pricing)
+- **Total:** 92 unit tests with 100% module coverage
+
+### Integration Tests (test_integration.py)
+- **TestFullPipeline:** 2 tests
+  - `test_parse_chunk_flow()` - Parser → Chunker → Text
+  - `test_full_pipeline()` - Complete end-to-end with mocked API
+- **TestErrorHandling:** 3 tests
+  - `test_invalid_file_format()` - Unsupported file rejection
+  - `test_empty_file()` - Empty input handling
+  - `test_malformed_srt()` - Malformed content handling
+- **Total:** 5 integration tests covering full pipeline
+
+### Test Execution
+```bash
+# All tests (86 total)
+pytest
+
+# Unit tests only
+pytest tests/ --ignore=tests/test_integration.py
+
+# Integration tests only
+pytest tests/test_integration.py
+
+# Specific module
+pytest tests/test_parser.py -v
+```
+
 ## Scalability Considerations
 
-### Current Design (Phase 1-6)
+### Current Design (Phase 1-6 - MVP Complete)
 - Single-user, sequential processing
-- Suitable for MVP and small batches
+- Suitable for production MVP
+- Handles lectures up to 90 minutes
+- Estimated cost: $0.20-$0.60 per hour of video
 
 ### Future Enhancements
 - Batch processing for multiple files
-- Parallel chunk processing (async)
+- Parallel chunk processing (async/concurrent)
 - Caching of base prompt tokens
-- Streaming results to user
-- Database for processing history
+- Streaming results to user in real-time
+- Database for processing history and metrics
+- Queue system for high-volume processing
 
 ---
 

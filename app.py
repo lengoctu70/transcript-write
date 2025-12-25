@@ -3,6 +3,7 @@ import streamlit as st
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import traceback
 
 from src import (
     TranscriptParser,
@@ -13,6 +14,11 @@ from src import (
     CostEstimator,
     process_transcript
 )
+
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
 # Load environment variables
 load_dotenv()
@@ -169,6 +175,28 @@ def main():
             st.info("👈 Enter your API key in the sidebar to continue")
 
 
+def safe_process(func):
+    """Wrap processing with user-friendly errors"""
+    try:
+        return func()
+    except Exception as e:
+        error_name = type(e).__name__
+
+        # Check for specific Anthropic errors by name
+        if anthropic and error_name == "AuthenticationError":
+            st.error("❌ Invalid API key. Check your Anthropic API key.")
+        elif anthropic and error_name == "RateLimitError":
+            st.error("⏳ Rate limit reached. Please wait a moment and try again.")
+        elif anthropic and error_name == "APIConnectionError":
+            st.error("🌐 Network error. Check your internet connection.")
+        else:
+            st.error(f"❌ Unexpected error: {str(e)}")
+            # Log full error for debugging
+            with st.expander("Error details"):
+                st.code(traceback.format_exc())
+        return None
+
+
 def process_transcript_ui(
     chunks: list,
     api_key: str,
@@ -186,18 +214,21 @@ def process_transcript_ui(
         progress_bar.progress(current / total)
         status_text.text(f"Processing chunk {current}/{total}...")
 
-    # Process
-    try:
-        results, summary = process_transcript(
+    # Process with error handling
+    def do_process():
+        return process_transcript(
             chunks=chunks,
             api_key=api_key,
             video_title=video_title,
             model=model,
             progress_callback=update_progress
         )
-    except Exception as e:
-        st.error(f"Processing failed: {e}")
+
+    result = safe_process(do_process)
+    if result is None:
         return
+
+    results, summary = result
 
     # Clear progress
     progress_bar.empty()
