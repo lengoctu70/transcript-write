@@ -1,8 +1,9 @@
-"""Process chunks via Claude API with retry logic"""
+"""Process chunks via Claude/DeepSeek API with retry logic"""
 import os
 from dataclasses import dataclass
 from typing import Optional, Callable
 from pathlib import Path
+from enum import Enum
 
 import anthropic
 from tenacity import (
@@ -15,6 +16,12 @@ from tenacity import (
 from .chunker import Chunk
 
 
+class LLMProvider(Enum):
+    """Available LLM providers"""
+    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
+
+
 @dataclass
 class ProcessedChunk:
     """Result of LLM processing"""
@@ -25,6 +32,7 @@ class ProcessedChunk:
     output_tokens: int
     cost: float
     model: str
+    provider: str
 
 
 class ProcessingError(Exception):
@@ -38,42 +46,75 @@ class ProcessingError(Exception):
 
 
 class LLMProcessor:
-    """Process transcript chunks via Claude API"""
+    """Process transcript chunks via Claude or DeepSeek API"""
 
-    # Pricing per 1K tokens (Dec 2024)
+    # Provider env key mapping
+    PROVIDER_ENV_KEYS = {
+        LLMProvider.ANTHROPIC: "ANTHROPIC_API_KEY",
+        LLMProvider.DEEPSEEK: "DEEPSEEK_API_KEY"
+    }
+
+    # Model to provider mapping
+    MODEL_PROVIDER = {
+        "claude-3-5-sonnet-20241022": LLMProvider.ANTHROPIC,
+        "claude-3-5-haiku-20241022": LLMProvider.ANTHROPIC,
+        "deepseek-chat": LLMProvider.DEEPSEEK,
+        "deepseek-reasoner": LLMProvider.DEEPSEEK,
+    }
+
+    # Pricing per 1K tokens
     PRICING = {
-        "claude-3-5-sonnet-20241022": {
-            "input": 0.003,
-            "output": 0.015
-        },
-        "claude-3-5-haiku-20241022": {
-            "input": 0.001,
-            "output": 0.005
-        }
+        "claude-3-5-sonnet-20241022": {"input": 0.003, "output": 0.015},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005},
+        "deepseek-chat": {"input": 0.00027, "output": 0.0011},
+        "deepseek-reasoner": {"input": 0.00056, "output": 0.0022},
     }
 
     def __init__(
         self,
         api_key: Optional[str] = None,
         model: str = "claude-3-5-sonnet-20241022",
+        provider: Optional[LLMProvider] = None,
         temperature: float = 0.3,
         max_tokens: int = 4096
     ):
         """
         Args:
-            api_key: Anthropic API key (or from env ANTHROPIC_API_KEY)
+            api_key: API key (or from provider-specific env var)
             model: Model identifier
+            provider: LLM provider (inferred from model if not specified)
             temperature: Lower = more deterministic
             max_tokens: Max output tokens per request
         """
-        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("API key required. Set ANTHROPIC_API_KEY env var.")
-
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        # Determine provider from model if not specified
+        if provider is None:
+            provider = self.MODEL_PROVIDER.get(model, LLMProvider.ANTHROPIC)
+        self.provider = provider
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
+
+        # Get API key
+        env_key = self.PROVIDER_ENV_KEYS[provider]
+        self.api_key = api_key or os.getenv(env_key)
+        if not self.api_key:
+            raise ValueError(f"API key required. Set {env_key} env var.")
+
+        # Initialize provider-specific client
+        self.client = self._init_client()
+
+    def _init_client(self):
+        """Initialize provider-specific API client"""
+        if self.provider == LLMProvider.ANTHROPIC:
+            return anthropic.Anthropic(api_key=self.api_key)
+        elif self.provider == LLMProvider.DEEPSEEK:
+            from openai import OpenAI
+            return OpenAI(
+                api_key=self.api_key,
+                base_url="https://api.deepseek.com"
+            )
+        else:
+            raise ValueError(f"Unsupported provider: {self.provider}")
 
     def load_prompt_template(
         self, template_path: Optional[str] = None
@@ -90,52 +131,64 @@ class LLMProcessor:
         with open(path, "r") as f:
             return f.read()
 
+    def _get_retry_exceptions(self):
+        """Get retryable exceptions for current provider"""
+        if self.provider == LLMProvider.ANTHROPIC:
+            return (anthropic.RateLimitError, anthropic.APIConnectionError,
+                    anthropic.InternalServerError)
+        elif self.provider == LLMProvider.DEEPSEEK:
+            # OpenAI exceptions for DeepSeek
+            from openai import RateLimitError, APIConnectionError, InternalServerError
+            return (RateLimitError, APIConnectionError, InternalServerError)
+        return ()
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((
-            anthropic.RateLimitError,
-            anthropic.APIConnectionError,
-            anthropic.InternalServerError
-        ))
+        retry=retry_if_exception_type(())
     )
     def process_chunk(
         self,
         chunk: Chunk,
         prompt_template: str,
-        video_title: str = "Untitled"
+        video_title: str = "Untitled",
+        output_language: str = "English"
     ) -> ProcessedChunk:
         """
-        Process single chunk through Claude API.
+        Process single chunk through LLM API.
 
         Args:
             chunk: Chunk object with text and context
-            prompt_template: Template with {{fileName}} and {{chunkText}} placeholders
+            prompt_template: Template with {{fileName}}, {{chunkText}}, {{outputLanguage}} placeholders
             video_title: Title for {{fileName}} placeholder
+            output_language: Output language (default: "English")
 
         Returns:
             ProcessedChunk with cleaned text and usage stats
         """
         # Build final prompt
         user_message = self._build_prompt(
-            chunk, prompt_template, video_title
+            chunk, prompt_template, video_title, output_language
         )
 
-        # Call Claude API
+        # Call provider API
+        if self.provider == LLMProvider.ANTHROPIC:
+            return self._call_anthropic(chunk, user_message)
+        elif self.provider == LLMProvider.DEEPSEEK:
+            return self._call_deepseek(chunk, user_message)
+        else:
+            raise ValueError(f"Unsupported provider: {self.provider}")
+
+    def _call_anthropic(self, chunk: Chunk, user_message: str) -> ProcessedChunk:
+        """Call Anthropic API"""
         response = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
-            messages=[{
-                "role": "user",
-                "content": user_message
-            }]
+            messages=[{"role": "user", "content": user_message}]
         )
 
-        # Extract result
         cleaned_text = response.content[0].text
-
-        # Calculate cost
         cost = self._calculate_cost(
             response.usage.input_tokens,
             response.usage.output_tokens
@@ -148,7 +201,34 @@ class LLMProcessor:
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
             cost=cost,
-            model=self.model
+            model=self.model,
+            provider=self.provider.value
+        )
+
+    def _call_deepseek(self, chunk: Chunk, user_message: str) -> ProcessedChunk:
+        """Call DeepSeek API (OpenAI-compatible)"""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            messages=[{"role": "user", "content": user_message}]
+        )
+
+        cleaned_text = response.choices[0].message.content
+        cost = self._calculate_cost(
+            response.usage.prompt_tokens,
+            response.usage.completion_tokens
+        )
+
+        return ProcessedChunk(
+            chunk_index=chunk.index,
+            original_text=chunk.text,
+            cleaned_text=cleaned_text,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            cost=cost,
+            model=self.model,
+            provider=self.provider.value
         )
 
     def process_all_chunks(
@@ -156,6 +236,7 @@ class LLMProcessor:
         chunks: list[Chunk],
         prompt_template: str,
         video_title: str = "Untitled",
+        output_language: str = "English",
         progress_callback: Optional[Callable[[int, int], None]] = None
     ) -> list[ProcessedChunk]:
         """
@@ -165,6 +246,7 @@ class LLMProcessor:
             chunks: List of Chunk objects
             prompt_template: Prompt template
             video_title: Video title
+            output_language: Output language (default: "English")
             progress_callback: fn(current, total) called after each chunk
 
         Returns:
@@ -173,7 +255,7 @@ class LLMProcessor:
         results = []
 
         for i, chunk in enumerate(chunks):
-            result = self.process_chunk(chunk, prompt_template, video_title)
+            result = self.process_chunk(chunk, prompt_template, video_title, output_language)
             results.append(result)
 
             if progress_callback:
@@ -185,7 +267,8 @@ class LLMProcessor:
         self,
         chunk: Chunk,
         template: str,
-        video_title: str
+        video_title: str,
+        output_language: str = "English"
     ) -> str:
         """Build final prompt from template and chunk"""
         # Get chunk text with context
@@ -194,6 +277,7 @@ class LLMProcessor:
         # Replace placeholders
         prompt = template.replace("{{fileName}}", video_title)
         prompt = prompt.replace("{{chunkText}}", chunk_text)
+        prompt = prompt.replace("{{outputLanguage}}", output_language)
 
         return prompt
 
@@ -217,6 +301,7 @@ def process_transcript(
     video_title: str,
     model: str = "claude-3-5-sonnet-20241022",
     prompt_path: Optional[str] = None,
+    output_language: str = "English",
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> tuple[list[ProcessedChunk], dict]:
     """
@@ -229,7 +314,7 @@ def process_transcript(
     template = processor.load_prompt_template(prompt_path)
 
     results = processor.process_all_chunks(
-        chunks, template, video_title, progress_callback
+        chunks, template, video_title, output_language, progress_callback
     )
 
     # Calculate totals

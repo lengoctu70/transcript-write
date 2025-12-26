@@ -1,12 +1,19 @@
 """Estimate API costs before processing"""
 from dataclasses import dataclass
 from typing import List
+from enum import Enum
 
 try:
     import tiktoken
     HAS_TIKTOKEN = True
 except ImportError:
     HAS_TIKTOKEN = False
+
+
+class LLMProvider(Enum):
+    """Available LLM providers"""
+    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
 
 
 @dataclass
@@ -24,21 +31,36 @@ class CostBreakdown:
 class CostEstimator:
     """Estimate costs before processing"""
 
+    # Pricing per 1K tokens (input, output)
     PRICING = {
-        "claude-3-5-sonnet-20241022": {
-            "input": 0.003,
-            "output": 0.015
-        },
-        "claude-3-5-haiku-20241022": {
-            "input": 0.001,
-            "output": 0.005
-        }
+        # Anthropic Claude
+        "claude-3-5-sonnet-20241022": {"input": 0.003, "output": 0.015, "provider": LLMProvider.ANTHROPIC},
+        "claude-3-5-haiku-20241022": {"input": 0.001, "output": 0.005, "provider": LLMProvider.ANTHROPIC},
+        # DeepSeek
+        "deepseek-chat": {"input": 0.00027, "output": 0.0011, "provider": LLMProvider.DEEPSEEK},
+        "deepseek-reasoner": {"input": 0.00056, "output": 0.0022, "provider": LLMProvider.DEEPSEEK},
     }
 
     TIME_PER_CHUNK = {
         "claude-3-5-sonnet-20241022": 5,
-        "claude-3-5-haiku-20241022": 3
+        "claude-3-5-haiku-20241022": 3,
+        "deepseek-chat": 3,
+        "deepseek-reasoner": 4,
     }
+
+    # Provider groupings for UI
+    PROVIDER_MODELS = {
+        LLMProvider.ANTHROPIC: ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+        LLMProvider.DEEPSEEK: ["deepseek-chat", "deepseek-reasoner"],
+    }
+
+    @staticmethod
+    def get_provider(model: str) -> LLMProvider:
+        """Get provider for a model"""
+        model_info = CostEstimator.PRICING.get(model)
+        if model_info:
+            return model_info["provider"]
+        return LLMProvider.ANTHROPIC
 
     def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
         self.model = model
@@ -94,7 +116,7 @@ class CostEstimator:
             total_input += input_t
             total_output += output_t
 
-        prices = self.PRICING.get(self.model, self.PRICING["claude-3-5-sonnet-20241022"])
+        prices = self.PRICING.get(self.model, {"input": 0.003, "output": 0.015})
         input_cost = (total_input / 1000) * prices["input"]
         output_cost = (total_output / 1000) * prices["output"]
 

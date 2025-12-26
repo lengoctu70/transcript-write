@@ -118,6 +118,28 @@ class MarkdownWriter:
         safe = re.sub(r'\s+', '-', safe)
         return safe[:50].strip('-')
 
+    def _apply_highlights_for_streamlit(self, text: str) -> str:
+        """Convert ==**highlight**== markers to HTML for Streamlit rendering
+
+        Supports:
+        - ==**text**== → highlighted bold
+        - ==**💡 text**== → emoji + highlighted bold
+
+        Uses optimized colors from UI/UX design:
+        - Background: #FEF08A (warm yellow, high visibility)
+        - Text: #713F12 (dark amber, strong contrast)
+        - Border: #F59E0B (amber accent, visual anchor)
+
+        Returns:
+            HTML string with <mark> tags for Streamlit rendering
+        """
+        highlighted = re.sub(
+            r'==\*\*([^*]+)\*\*==',
+            r'<mark style="background-color: #FEF08A; color: #713F12; padding: 3px 6px; margin: 0 1px; border-radius: 4px; border-left: 3px solid #F59E0B; font-weight: 600; letter-spacing: 0.005em; line-height: 1.75; transition: background-color 150ms ease;">\1</mark>',
+            text
+        )
+        return highlighted
+
     def get_content_for_preview(
         self, chunks: list, max_chars: int = 5000
     ) -> str:
@@ -135,4 +157,5 @@ class MarkdownWriter:
             content.append(text)
             total_chars += len(text)
 
-        return "\n\n".join(content)
+        combined = "\n\n".join(content)
+        return self._apply_highlights_for_streamlit(combined)

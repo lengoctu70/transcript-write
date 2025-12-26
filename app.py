@@ -9,6 +9,7 @@ from src import (
     TranscriptParser,
     SmartChunker,
     LLMProcessor,
+    LLMProvider,
     OutputValidator,
     MarkdownWriter,
     CostEstimator,
@@ -20,6 +21,12 @@ try:
 except ImportError:
     anthropic = None
 
+try:
+    from openai import AuthenticationError as OpenAIAuthError, RateLimitError as OpenAIRateError, APIConnectionError as OpenAIConnectionError
+    openai_errors = True
+except ImportError:
+    openai_errors = False
+
 # Load environment variables
 load_dotenv()
 
@@ -30,6 +37,40 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS for highlighting system (optimized for learning)
+st.markdown("""
+<style>
+/* Highlighted key concepts */
+mark {
+    background-color: #FEF08A;
+    color: #713F12;
+    padding: 3px 6px;
+    margin: 0 1px;
+    border-radius: 4px;
+    border-left: 3px solid #F59E0B;
+    font-weight: 600;
+    letter-spacing: 0.005em;
+    line-height: 1.75;
+    transition: background-color 150ms ease;
+}
+
+mark:hover {
+    background-color: #FDE047;
+    box-shadow: 0 0 0 2px rgba(254, 240, 138, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    mark {
+        transition: none;
+    }
+    mark:hover {
+        box-shadow: none;
+        background-color: #FEF08A;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 def main():
     st.title("📝 Transcript Cleaning Tool")
@@ -39,22 +80,45 @@ def main():
     with st.sidebar:
         st.header("Configuration")
 
-        # API Key
-        api_key = st.text_input(
-            "Anthropic API Key",
-            value=os.getenv("ANTHROPIC_API_KEY", ""),
-            type="password",
-            help="Get your API key from console.anthropic.com"
+        # Provider selection
+        provider = st.radio(
+            "LLM Provider",
+            options=["Anthropic (Claude)", "DeepSeek"],
+            help="Choose your LLM provider"
         )
+
+        # API Key input based on provider
+        if provider == "Anthropic (Claude)":
+            api_key = st.text_input(
+                "Anthropic API Key",
+                value=os.getenv("ANTHROPIC_API_KEY", ""),
+                type="password",
+                help="Get your API key from console.anthropic.com"
+            )
+            model_options = ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"]
+            model_help = "Sonnet: Higher quality, higher cost. Haiku: Faster, cheaper."
+        else:  # DeepSeek
+            api_key = st.text_input(
+                "DeepSeek API Key",
+                value=os.getenv("DEEPSEEK_API_KEY", ""),
+                type="password",
+                help="Get your API key from platform.deepseek.com"
+            )
+            model_options = ["deepseek-chat", "deepseek-reasoner"]
+            model_help = "Chat: Standard mode. Reasoner: Thinking mode with Chain-of-Thought."
 
         # Model selection
         model = st.selectbox(
             "Model",
-            options=[
-                "claude-3-5-sonnet-20241022",
-                "claude-3-5-haiku-20241022"
-            ],
-            help="Sonnet: Higher quality, higher cost. Haiku: Faster, cheaper."
+            options=model_options,
+            help=model_help
+        )
+
+        # Language selection
+        output_language = st.selectbox(
+            "Output Language",
+            options=["English", "Vietnamese"],
+            help="Language for the cleaned transcript output (technical terms stay in English)"
         )
 
         # Chunking config
@@ -78,7 +142,7 @@ def main():
         )
 
         st.divider()
-        st.caption("Built with Streamlit + Claude API")
+        st.caption("Built with Streamlit + Claude/DeepSeek API")
 
     # Main content area
     col1, col2 = st.columns([1, 1])
@@ -168,7 +232,8 @@ def main():
                     api_key=api_key,
                     model=model,
                     video_title=video_title,
-                    prompt_template=prompt_template
+                    prompt_template=prompt_template,
+                    output_language=output_language
                 )
 
         elif not api_key:
@@ -182,12 +247,18 @@ def safe_process(func):
     except Exception as e:
         error_name = type(e).__name__
 
-        # Check for specific Anthropic errors by name
+        # Check for specific errors by name
         if anthropic and error_name == "AuthenticationError":
             st.error("❌ Invalid API key. Check your Anthropic API key.")
+        elif openai_errors and isinstance(e, OpenAIAuthError):
+            st.error("❌ Invalid API key. Check your DeepSeek API key.")
         elif anthropic and error_name == "RateLimitError":
             st.error("⏳ Rate limit reached. Please wait a moment and try again.")
+        elif openai_errors and isinstance(e, OpenAIRateError):
+            st.error("⏳ Rate limit reached. Please wait a moment and try again.")
         elif anthropic and error_name == "APIConnectionError":
+            st.error("🌐 Network error. Check your internet connection.")
+        elif openai_errors and isinstance(e, OpenAIConnectionError):
             st.error("🌐 Network error. Check your internet connection.")
         else:
             st.error(f"❌ Unexpected error: {str(e)}")
@@ -202,7 +273,8 @@ def process_transcript_ui(
     api_key: str,
     model: str,
     video_title: str,
-    prompt_template: str
+    prompt_template: str,
+    output_language: str = "English"
 ):
     """Process transcript with progress tracking"""
 
@@ -221,6 +293,7 @@ def process_transcript_ui(
             api_key=api_key,
             video_title=video_title,
             model=model,
+            output_language=output_language,
             progress_callback=update_progress
         )
 
@@ -268,11 +341,12 @@ def process_transcript_ui(
 
     with tab1:
         preview = writer.get_content_for_preview(results, max_chars=3000)
-        st.markdown(preview)
+        st.markdown(preview, unsafe_allow_html=True)
 
     with tab2:
         full_content = md_path.read_text()
-        st.markdown(full_content)
+        highlighted_content = writer._apply_highlights_for_streamlit(full_content)
+        st.markdown(highlighted_content, unsafe_allow_html=True)
 
     with tab3:
         st.json(summary)
