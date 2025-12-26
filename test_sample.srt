@@ -1,0 +1,27 @@
+1
+00:00:00,000 --> 00:00:05,000
+Welcome to this introduction to machine learning course.
+
+2
+00:00:05,000 --> 00:00:12,000
+In this lecture, we will discuss the fundamental concepts of neural networks and deep learning.
+
+3
+00:00:12,000 --> 00:00:20,000
+Machine learning is basically a subset of artificial intelligence that enables computers to learn from data.
+
+4
+00:00:20,000 --> 00:00:28,000
+The learning rate is a hyperparameter that controls how much the model is changed in response to the estimated error.
+
+5
+00:00:28,000 --> 00:00:35,000
+Neural networks are computing systems inspired by biological neural networks in the human brain.
+
+6
+00:00:35,000 --> 00:00:42,000
+Backpropagation is the algorithm used to train neural networks by calculating gradients.
+
+7
+00:00:42,000 --> 00:00:50,000
+Gradient descent is an optimization algorithm that iteratively adjusts parameters to minimize the loss function.

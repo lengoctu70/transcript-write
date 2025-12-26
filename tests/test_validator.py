@@ -220,6 +220,8 @@ class TestOutputValidator:
                 output_tokens=40,
                 cost=0.001,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             ),
             ProcessedChunk(
                 chunk_index=1,
@@ -229,6 +231,8 @@ class TestOutputValidator:
                 output_tokens=25,
                 cost=0.0005,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -248,7 +252,9 @@ class TestOutputValidator:
             output_tokens=15,
             cost=0.0003,
             model="claude-3-5-sonnet-20241022"
-        )
+        ,
+                provider="anthropic"
+            )
 
         result = validator.validate_all([chunk])
         assert not result.has_errors

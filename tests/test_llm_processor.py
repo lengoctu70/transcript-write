@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch, MagicMock
 from src.chunker import Chunk
 from src.llm_processor import (
     LLMProcessor,
+    LLMProvider,
     ProcessedChunk,
     ProcessingError,
     process_transcript
@@ -22,7 +23,8 @@ class TestProcessedChunk:
             input_tokens=100,
             output_tokens=80,
             cost=0.0015,
-            model="claude-3-5-sonnet-20241022"
+            model="claude-3-5-sonnet-20241022",
+            provider="anthropic"
         )
         assert chunk.chunk_index == 0
         assert chunk.original_text == "Original text"
@@ -30,6 +32,7 @@ class TestProcessedChunk:
         assert chunk.input_tokens == 100
         assert chunk.output_tokens == 80
         assert chunk.cost == 0.0015
+        assert chunk.provider == "anthropic"
 
 
 class TestProcessingError:
@@ -151,6 +154,7 @@ class TestLLMProcessor:
         assert result.input_tokens == 100
         assert result.output_tokens == 80
         assert result.model == "claude-3-5-sonnet-20241022"
+        assert result.provider == "anthropic"
 
     @patch('src.llm_processor.anthropic.Anthropic')
     def test_process_all_chunks_with_callback(self, mock_anthropic):
@@ -240,3 +244,135 @@ class TestProcessTranscript:
         assert summary["total_output_tokens"] == 160
         assert summary["model"] == "claude-3-5-sonnet-20241022"
         assert "total_cost" in summary
+
+
+class TestLLMProcessorDeepSeek:
+    """Test LLMProcessor with DeepSeek provider"""
+
+    @patch('builtins.__import__')
+    def test_init_deepseek_provider(self, mock_import):
+        """Initialize LLMProcessor with DeepSeek provider"""
+        # Mock OpenAI import
+        mock_openai = Mock()
+        mock_openai.OpenAI = Mock()
+        mock_import.return_value = mock_openai
+
+        processor = LLMProcessor(
+            api_key="test-deepseek-key",
+            model="deepseek-chat",
+            provider=LLMProvider.DEEPSEEK
+        )
+        assert processor.provider == LLMProvider.DEEPSEEK
+        assert processor.model == "deepseek-chat"
+
+    @patch('builtins.__import__')
+    def test_init_deepseek_from_model(self, mock_import):
+        """Provider inferred from DeepSeek model"""
+        mock_openai = Mock()
+        mock_openai.OpenAI = Mock()
+        mock_import.return_value = mock_openai
+
+        processor = LLMProcessor(
+            api_key="test-key",
+            model="deepseek-reasoner"
+        )
+        assert processor.provider == LLMProvider.DEEPSEEK
+
+    def test_deepseek_missing_api_key(self):
+        """Raise error when DeepSeek API key not provided"""
+        with patch.dict('os.environ', {}, clear=True):
+            with pytest.raises(ValueError, match="DEEPSEEK_API_KEY"):
+                LLMProcessor(model="deepseek-chat")
+
+    @patch('builtins.__import__')
+    def test_deepseek_api_key_from_env(self, mock_import):
+        """Load DeepSeek API key from environment"""
+        mock_openai = Mock()
+        mock_openai.OpenAI = Mock()
+        mock_import.return_value = mock_openai
+
+        with patch.dict('os.environ', {'DEEPSEEK_API_KEY': 'sk-deepseek-123'}):
+            processor = LLMProcessor(model="deepseek-chat")
+            assert processor.api_key == "sk-deepseek-123"
+
+    @patch('builtins.__import__')
+    def test_deepseek_process_chunk(self, mock_import):
+        """Process chunk with DeepSeek API"""
+        # Setup mock OpenAI module and client
+        mock_openai = Mock()
+        mock_client = Mock()
+
+        # Setup mock response
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content="DeepSeek cleaned text"))]
+        mock_response.usage.prompt_tokens = 90
+        mock_response.usage.completion_tokens = 70
+
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai.OpenAI.return_value = mock_client
+        mock_import.return_value = mock_openai
+
+        # Create chunk and process
+        chunk = Chunk(index=0, text="Original text", start_timestamp="00:00:00")
+        template = "Clean: {{chunkText}}"
+
+        processor = LLMProcessor(
+            api_key="test-key",
+            model="deepseek-chat",
+            provider=LLMProvider.DEEPSEEK
+        )
+        result = processor.process_chunk(chunk, template, "Test Video")
+
+        assert result.chunk_index == 0
+        assert result.cleaned_text == "DeepSeek cleaned text"
+        assert result.input_tokens == 90
+        assert result.output_tokens == 70
+        assert result.model == "deepseek-chat"
+        assert result.provider == "deepseek"
+
+    @patch('builtins.__import__')
+    def test_cost_calculation_deepseek_chat(self, mock_import):
+        """Calculate cost for deepseek-chat model"""
+        mock_openai = Mock()
+        mock_openai.OpenAI = Mock()
+        mock_import.return_value = mock_openai
+
+        processor = LLMProcessor(
+            api_key="test-key",
+            model="deepseek-chat"
+        )
+        # deepseek-chat: $0.00027/1K input, $0.0011/1K output
+        cost = processor._calculate_cost(1000, 500)
+        assert round(cost, 6) == round((1000/1000) * 0.00027 + (500/1000) * 0.0011, 6)
+
+    @patch('builtins.__import__')
+    def test_cost_calculation_deepseek_reasoner(self, mock_import):
+        """Calculate cost for deepseek-reasoner model"""
+        mock_openai = Mock()
+        mock_openai.OpenAI = Mock()
+        mock_import.return_value = mock_openai
+
+        processor = LLMProcessor(
+            api_key="test-key",
+            model="deepseek-reasoner"
+        )
+        # deepseek-reasoner: $0.00056/1K input, $0.0022/1K output
+        cost = processor._calculate_cost(1000, 500)
+        assert round(cost, 6) == round((1000/1000) * 0.00056 + (500/1000) * 0.0022, 6)
+
+
+class TestLLMProviderEnum:
+    """Test LLMProvider enum"""
+
+    def test_provider_values(self):
+        """Provider enum has correct values"""
+        assert LLMProvider.ANTHROPIC.value == "anthropic"
+        assert LLMProvider.DEEPSEEK.value == "deepseek"
+
+    def test_model_provider_mapping(self):
+        """Model to provider mapping is correct"""
+        assert LLMProcessor.MODEL_PROVIDER["claude-3-5-sonnet-20241022"] == LLMProvider.ANTHROPIC
+        assert LLMProcessor.MODEL_PROVIDER["claude-3-5-haiku-20241022"] == LLMProvider.ANTHROPIC
+        assert LLMProcessor.MODEL_PROVIDER["deepseek-chat"] == LLMProvider.DEEPSEEK
+        assert LLMProcessor.MODEL_PROVIDER["deepseek-reasoner"] == LLMProvider.DEEPSEEK
+

@@ -106,6 +106,8 @@ class TestMarkdownWriter:
                 output_tokens=80,
                 cost=0.001,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             ),
             ProcessedChunk(
                 chunk_index=1,
@@ -115,6 +117,8 @@ class TestMarkdownWriter:
                 output_tokens=90,
                 cost=0.0012,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -176,6 +180,8 @@ class TestMarkdownWriter:
                 output_tokens=40,
                 cost=0.0005,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -212,6 +218,8 @@ class TestMarkdownWriter:
                 output_tokens=25,
                 cost=0.0003,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -247,6 +255,8 @@ class TestMarkdownWriter:
                 output_tokens=80,
                 cost=0.001,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -285,6 +295,8 @@ class TestMarkdownWriter:
                 output_tokens=15,
                 cost=0.0002,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             ),
             ProcessedChunk(
                 chunk_index=1,
@@ -294,6 +306,8 @@ class TestMarkdownWriter:
                 output_tokens=20,
                 cost=0.00025,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             ),
             ProcessedChunk(
                 chunk_index=2,
@@ -303,6 +317,8 @@ class TestMarkdownWriter:
                 output_tokens=25,
                 cost=0.0003,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -342,7 +358,8 @@ class TestMarkdownWriter:
                 input_tokens=10,
                 output_tokens=8,
                 cost=0.0001,
-                model="claude-3-5-sonnet-20241022"
+                model="claude-3-5-sonnet-20241022",
+                provider="anthropic"
             )
         ]
 
@@ -362,7 +379,8 @@ class TestMarkdownWriter:
                 input_tokens=1000,
                 output_tokens=800,
                 cost=0.01,
-                model="claude-3-5-sonnet-20241022"
+                model="claude-3-5-sonnet-20241022",
+                provider="anthropic"
             )
         ]
 
@@ -382,7 +400,8 @@ class TestMarkdownWriter:
                 input_tokens=500,
                 output_tokens=400,
                 cost=0.005,
-                model="claude-3-5-sonnet-20241022"
+                model="claude-3-5-sonnet-20241022",
+                provider="anthropic"
             ),
             ProcessedChunk(
                 chunk_index=1,
@@ -391,7 +410,8 @@ class TestMarkdownWriter:
                 input_tokens=500,
                 output_tokens=400,
                 cost=0.005,
-                model="claude-3-5-sonnet-20241022"
+                model="claude-3-5-sonnet-20241022",
+                provider="anthropic"
             )
         ]
 
@@ -419,6 +439,8 @@ class TestMarkdownWriter:
                 output_tokens=8,
                 cost=0.0001,
                 model="claude-3-5-sonnet-20241022"
+            ,
+                provider="anthropic"
             )
         ]
 
@@ -455,7 +477,8 @@ class TestMarkdownWriter:
                 input_tokens=10,
                 output_tokens=0,
                 cost=0.0,
-                model="claude-3-5-sonnet-20241022"
+                model="claude-3-5-sonnet-20241022",
+                provider="anthropic"
             )
         ]
 
