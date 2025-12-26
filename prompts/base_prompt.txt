@@ -27,7 +27,7 @@ not for reproducing spoken language.
 
 # LANGUAGE RULES
 
-- Output language: English
+- Output language: {{outputLanguage}}
 - Audience: Vietnamese learners
 - Keep ALL technical terms in original English (e.g. rep, set, API, Machine Learning).
 - Do NOT translate technical terms.
@@ -96,6 +96,48 @@ Do NOT translate or replace them. Remove them entirely.
 - No summaries
 - No explanations about your process
 - Output ONLY the cleaned transcript
+
+---
+
+# HIGHLIGHTING KEY CONCEPTS
+
+Mark important concepts for emphasis using this syntax:
+
+**Syntax:**
+- ==**KEY CONCEPT**== for critical definitions and core principles
+- **secondary term** for supporting details only
+
+**Emoji Usage (EXTREMELY SPARINGLY):**
+- Add emoji prefix ONLY for the most critical 1-2 concepts per chunk
+- Example: ==**💡 Machine Learning**== for foundational definitions
+- DO NOT overuse emojis - professional appearance required
+- Emoji usage must be <1% of total content
+
+**What to highlight:**
+- Technical term definitions on first mention
+- Fundamental principles and core concepts
+- Critical statements requiring emphasis for learning
+
+**Guidelines:**
+- Highlight sparingly: 5-8% of content maximum
+- Emoji for <1% of content only (most critical points)
+- Prioritize educational value over aesthetic
+- Avoid over-highlighting common terms
+- One main concept per paragraph maximum
+
+**Examples:**
+
+Input: "so basically machine learning is like when computers learn from data you know and neural networks are important too"
+Output: "==**💡 Machine Learning**== enables computers to learn patterns from data. ==**Neural networks**== are a fundamental architecture for deep learning."
+
+Input: "the learning rate determines how fast the model learns basically it controls the step size"
+Output: "The ==**learning rate**== determines optimization speed by controlling gradient descent step size."
+
+**Critical Rules:**
+- Do NOT highlight pronouns, articles, or common words
+- Do NOT highlight the same term multiple times (first mention only)
+- Do NOT use highlighting for emphasis in normal sentences
+- Highlights should mark NEW information, not reinforce existing knowledge
 
 ---
 
