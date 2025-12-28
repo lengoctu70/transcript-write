@@ -101,6 +101,32 @@ class TranscriptParser:
         text = " ".join(text.split())
         return text.strip()
 
+    def _normalize_transcript_whitespace(self, text: str) -> str:
+        """Aggressive whitespace normalization for lecture transcripts.
+
+        Designed for educational content only - no code blocks, tables, poetry.
+        Reduces false paragraph boundaries from SRT format.
+
+        Args:
+            text: Raw transcript text with timestamps
+
+        Returns:
+            Normalized text with reduced whitespace
+        """
+        # Collapse all multiple newlines to max 2 (paragraph break)
+        text = re.sub(r'\n{2,}', '\n\n', text)
+
+        # Remove whitespace around timestamps: \n[00:00:00]\n -> \n[00:00:00]
+        text = re.sub(r'\n+(\[[\d:]+\])\n+', r'\n\1 ', text)
+
+        # Strip line-level whitespace
+        text = '\n'.join(line.strip() for line in text.split('\n'))
+
+        # Remove remaining multiple empty lines
+        text = re.sub(r'\n\n+', '\n\n', text)
+
+        return text.strip()
+
     def _deduplicate(
         self, segments: List[TranscriptSegment]
     ) -> List[TranscriptSegment]:
@@ -116,7 +142,7 @@ class TranscriptParser:
         return result
 
     def to_plain_text(self, segments: List[TranscriptSegment]) -> str:
-        """Convert segments to timestamped plain text"""
+        """Convert segments to timestamped plain text with normalization"""
         lines = []
         current_time = None
 
@@ -127,4 +153,5 @@ class TranscriptParser:
 
             lines.append(seg.text)
 
-        return "\n".join(lines)
+        raw_text = "\n".join(lines)
+        return self._normalize_transcript_whitespace(raw_text)
