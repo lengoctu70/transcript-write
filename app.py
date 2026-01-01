@@ -13,7 +13,10 @@ from src import (
     OutputValidator,
     MarkdownWriter,
     CostEstimator,
-    process_transcript
+    process_transcript,
+    ResumableProcessor,
+    StateManager,
+    PauseRequested
 )
 
 try:
@@ -72,9 +75,59 @@ mark:hover {
 """, unsafe_allow_html=True)
 
 
+def show_resume_prompt(state_manager: StateManager):
+    """Show prompt to resume incomplete job"""
+    summary = state_manager.get_state_summary()
+    if summary is None:
+        return
+
+    st.info("🔄 Incomplete processing job found")
+
+    with st.expander("📊 Job Details", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("File", summary["file_name"])
+            st.metric("Progress", summary["progress"])
+        with col2:
+            st.metric("Status", summary["status"].upper())
+            st.metric("Failed Chunks", summary["failed_chunks"])
+        with col3:
+            st.metric("Estimated Cost", f"${summary['estimated_cost']:.4f}")
+            st.metric("Actual Cost", f"${summary['actual_cost']:.4f}")
+
+        st.progress(summary["progress_pct"] / 100)
+
+        if summary["failed_chunks"] > 0:
+            st.warning(f"⚠️ {summary['failed_chunks']} chunks failed and will be skipped")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📥 Resume Processing", use_container_width=True, type="primary"):
+            st.session_state.resume_job = True
+            st.rerun()
+    with col2:
+        if st.button("🗑️ Clear and Start Fresh", use_container_width=True):
+            state_manager.clear_state()
+            st.success("State cleared. You can start a new job.")
+            st.rerun()
+
+    st.divider()
+
+
 def main():
     st.title("📝 Transcript Cleaning Tool")
     st.markdown("Convert lecture transcripts to clean study notes")
+
+    # Initialize session state
+    if "resumable_processor" not in st.session_state:
+        st.session_state.resumable_processor = None
+    if "pause_requested" not in st.session_state:
+        st.session_state.pause_requested = False
+
+    # Check for resumable state on startup
+    state_manager = StateManager()
+    if state_manager.has_resumable_state():
+        show_resume_prompt(state_manager)
 
     # Sidebar configuration
     with st.sidebar:
@@ -227,13 +280,15 @@ def main():
                     return
 
             if st.button("🚀 Process Transcript", type="primary", use_container_width=True):
-                process_transcript_ui(
+                process_transcript_ui_resumable(
                     chunks=chunks,
                     api_key=api_key,
                     model=model,
                     video_title=video_title,
                     prompt_template=prompt_template,
-                    output_language=output_language
+                    output_language=output_language,
+                    file_name=uploaded_file.name,
+                    estimated_cost=estimate.total_cost
                 )
 
         elif not api_key:
@@ -268,42 +323,77 @@ def safe_process(func):
         return None
 
 
-def process_transcript_ui(
+def process_transcript_ui_resumable(
     chunks: list,
     api_key: str,
     model: str,
     video_title: str,
     prompt_template: str,
+    file_name: str,
+    estimated_cost: float,
     output_language: str = "English"
 ):
-    """Process transcript with progress tracking"""
+    """Process transcript with pause/resume capability"""
+
+    # Create resumable processor
+    processor = ResumableProcessor(api_key=api_key, model=model)
+
+    # Start new job
+    processor.start_new_job(
+        chunks=chunks,
+        file_name=file_name,
+        video_title=video_title,
+        prompt_template=prompt_template,
+        output_language=output_language,
+        estimated_cost=estimated_cost
+    )
 
     # Progress UI
     progress_bar = st.progress(0)
     status_text = st.empty()
+    pause_button_container = st.empty()
 
-    def update_progress(current: int, total: int):
-        progress_bar.progress(current / total)
-        status_text.text(f"Processing chunk {current}/{total}...")
+    # Show pause button
+    if pause_button_container.button("⏸️ Pause", key="pause_btn", use_container_width=True):
+        processor.pause()
+
+    def update_progress(current: int, total: int, status: str):
+        if total > 0:
+            progress_bar.progress(current / total)
+        if status == "processing":
+            status_text.text(f"Processing chunk {current + 1}/{total}...")
+        elif status == "completed":
+            status_text.text(f"Completed chunk {current}/{total}")
+        elif status == "skipped":
+            status_text.text(f"Skipped chunk {current}/{total} (already processed)")
 
     # Process with error handling
     def do_process():
-        return process_transcript(
+        return processor.process_all_chunks(
             chunks=chunks,
-            api_key=api_key,
+            prompt_template=prompt_template,
             video_title=video_title,
-            model=model,
             output_language=output_language,
-            progress_callback=update_progress
+            progress_callback=update_progress,
+            resume=False
         )
 
-    result = safe_process(do_process)
-    if result is None:
+    try:
+        result = safe_process(do_process)
+        if result is None:
+            return
+
+        results, summary = result
+
+    except PauseRequested:
+        pause_button_container.empty()
+        progress_bar.empty()
+        status_text.empty()
+        st.warning("⏸️ Processing paused. Reload the page to resume.")
         return
 
-    results, summary = result
-
-    # Clear progress
+    # Clear UI elements
+    pause_button_container.empty()
     progress_bar.empty()
     status_text.empty()
 
