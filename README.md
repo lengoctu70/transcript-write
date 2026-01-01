@@ -7,9 +7,11 @@ Convert lecture transcripts (SRT/VTT) to clean study notes using Claude or DeepS
 - Parse SRT and VTT subtitle files
 - Smart chunking with context preservation
 - **Multi-provider LLM support**: Anthropic Claude or DeepSeek
+- **Pause/Resume processing**: Stop and resume transcript processing without data loss
 - Cost estimation before processing
 - Rule-based output validation
 - Markdown export with metadata
+- Auto-recovery from network failures with automatic crash detection
 
 ## Quick Start
 
@@ -58,6 +60,19 @@ Convert lecture transcripts (SRT/VTT) to clean study notes using Claude or DeepS
 | 60 min       | ~$0.40        | ~$0.14       | ~$0.04        |
 | 90 min       | ~$0.60        | ~$0.21       | ~$0.06        |
 
+## Pause/Resume Feature
+
+Process transcripts without worrying about interruptions:
+
+- **Pause Anytime**: Stop processing at any point via UI button
+- **Resume Later**: Resume processing from where you left off
+- **Auto-Resume**: Incomplete jobs detected on startup with resume prompt
+- **Progress Tracking**: Real-time progress with chunk-level granularity
+- **Auto-Recovery**: Automatic recovery from network failures with exponential backoff
+- **State Persistence**: All progress saved to local JSON file (`.processing_state.json`)
+
+See [Pause/Resume User Guide](./docs/pause-resume-guide.md) for detailed instructions.
+
 ## Project Structure
 
 ```
@@ -67,11 +82,14 @@ transcript_write/
 │   ├── transcript_parser.py
 │   ├── chunker.py
 │   ├── llm_processor.py   # Multi-provider support
+│   ├── state_manager.py   # State persistence & checkpoints
+│   ├── resumable_processor.py  # Pause/resume wrapper
 │   ├── validator.py
 │   ├── markdown_writer.py
 │   └── cost_estimator.py
 ├── prompts/               # Prompt templates
 ├── output/                # Generated files
+│   └── .processing/       # Processing state storage
 └── tests/                 # Unit & integration tests
 ```
 
