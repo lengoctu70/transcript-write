@@ -1,8 +1,8 @@
 # System Architecture
 
-**Version:** 1.5
-**Phase:** 6 - Testing & Polish Complete
-**Last Updated:** 2025-12-25
+**Version:** 1.6
+**Phase:** 7 - Pause/Resume Feature Added
+**Last Updated:** 2026-01-01
 
 ---
 
@@ -12,9 +12,29 @@ Transcript Cleaner uses a **layered pipeline architecture** with clear separatio
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                  STREAMLIT UI LAYER (Phase 5)               │
-│  File Upload | Preview | Download | Cost Display           │
+│               STREAMLIT UI LAYER (Phases 5-7)               │
+│ File Upload | Preview | Download | Pause/Resume Buttons    │
 └──────────────────────┬──────────────────────────────────────┘
+                       │
+┌──────────────────────┴──────────────────────────────────────┐
+│        RESILIENCE LAYER (Phase 7 - Pause/Resume)            │
+│                                                              │
+│  ┌────────────────────┐      ┌──────────────────────┐      │
+│  │  StateManager      │◀────▶│ ResumableProcessor   │      │
+│  │ (State Persistence)│      │(Pause/Resume Logic) │      │
+│  └────────────────────┘      └──────────────────────┘      │
+│         │                              │                    │
+│         ▼                              │                    │
+│  .processing_state.json                │                    │
+│  (Local JSON checkpoint)               │                    │
+│                                        │                    │
+│  Features:                             │                    │
+│  - Atomic writes & file locking       │                    │
+│  - Auto-resume on startup             │                    │
+│  - Progress tracking per chunk        │                    │
+│  - Cost tracking (estimated vs actual)│                    │
+│                                        │                    │
+└────────────────────────────────────────┴────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────────────┐
 │           INPUT & CONFIGURATION LAYER (Phase 1)             │
@@ -78,7 +98,138 @@ Transcript Cleaner uses a **layered pipeline architecture** with clear separatio
 
 ---
 
-### 2. Input & Validation Layer (Parser)
+### 2. Resilience Layer - State Management (Phase 7)
+
+**Components:**
+- `src/state_manager.py` - State persistence and atomic writes
+- `src/resumable_processor.py` - Pause/resume wrapper around LLMProcessor
+
+#### State Manager
+
+**Responsibilities:**
+- Persist processing state to local JSON file
+- Manage atomic file writes with locking
+- Track progress per chunk (completed, failed)
+- Detect and recover from crashes
+- Cache processing results
+- Track cost metrics (estimated vs actual)
+
+**Key Features:**
+- **Atomic Writes:** Uses temporary files + atomic rename for data integrity
+- **File Locking:** FileLock mechanism prevents concurrent access issues
+- **Backup Management:** Maintains backup file for corruption recovery
+- **Thread-Safe:** All operations protected with file locks
+
+**ProcessingState Data Structure:**
+```python
+@dataclass
+class ProcessingState:
+    version: str                           # Format version
+    file_id: str                           # Unique file hash
+    file_name: str                         # Source filename
+    video_title: str                       # Processing title
+    status: str                            # idle|processing|paused|completed|crashed
+    started_at: str                        # ISO timestamp
+    last_updated: str                      # ISO timestamp
+
+    config: Dict[str, Any]                 # Processing config (model, provider, etc)
+
+    # Progress tracking
+    total_chunks: int                      # Total chunks to process
+    completed_chunks: List[int]            # Indices of completed chunks
+    failed_chunks: Dict[str, str]          # {chunk_idx: error_msg}
+
+    # Results cache
+    processed_results: List[Dict]          # Cached results from LLM
+
+    # Cost metrics
+    estimated_cost: float
+    actual_cost: float
+    total_input_tokens: int
+    total_output_tokens: int
+```
+
+**State File Location:** `output/.processing/processing_state.json`
+
+**Key Methods:**
+- `read_state()` - Load current state (thread-safe)
+- `write_state(state)` - Save state atomically (thread-safe)
+- `create_new_state()` - Initialize new processing session
+- `clear_state()` - Delete saved state after completion
+- `has_resumable_state()` - Check if session can be resumed
+- `get_state_summary()` - Get human-readable summary
+
+**Status:** ✓ Complete (Phase 7)
+
+---
+
+#### Resumable Processor
+
+**Responsibilities:**
+- Wraps LLMProcessor with pause/resume capability
+- Manage pause signal via threading.Event
+- Save state after each chunk (checkpoint)
+- Resume processing from saved state
+- Handle recovery from network failures
+- Coordinate with StateManager
+
+**Key Features:**
+- **Chunk Checkpoints:** State saved after each chunk completes
+- **Pause Signal:** Threading.Event for pause requests
+- **Graceful Pausing:** Completes current chunk before pausing
+- **Smart Skipping:** Skips already-processed chunks on resume
+- **Error Recovery:** Distinguishes recoverable vs fatal errors
+
+**ResumableProcessor Workflow:**
+```
+1. start_new_job(chunks, file_name, ...)
+   └─> Creates ProcessingState, saves to disk
+
+2. resume_from_state()
+   └─> Loads state if resumable, returns None otherwise
+
+3. process_all_chunks(chunks, resume=False)
+   ├─> Load/create state
+   ├─> For each chunk:
+   │   ├─> Check pause signal
+   │   ├─> Skip if already processed
+   │   ├─> Call processor.process_chunk()
+   │   ├─> Save to state (checkpoint)
+   │   └─> Call progress_callback()
+   ├─> Handle pause: save state as "paused"
+   ├─> Handle error: save state as "crashed"
+   └─> Return results & summary
+
+4. pause()
+   └─> Signal pause (checked between chunks)
+
+5. get_current_state()
+   └─> Read current state from disk
+```
+
+**Resumable Processor Data Structure:**
+```python
+class ResumableProcessor:
+    processor: LLMProcessor
+    state_manager: StateManager
+    pause_event: threading.Event
+    _is_processing: bool
+```
+
+**Error Handling:**
+- **Recoverable:** RateLimitError, APIConnectionError, InternalServerError
+  - Error logged to state.failed_chunks
+  - Processing continues with next chunk
+
+- **Fatal:** All other errors
+  - State marked as "crashed"
+  - Exception re-raised to caller
+
+**Status:** ✓ Complete (Phase 7)
+
+---
+
+### 3. Input & Validation Layer (Parser)
 
 **Component:** `src/transcript_parser.py`
 
@@ -139,7 +290,7 @@ class TranscriptSegment:
 
 ---
 
-### 3. Processing Pipeline - Chunker
+### 4. Processing Pipeline - Chunker
 
 **Component:** `src/chunker.py`
 
@@ -193,7 +344,7 @@ Chunk objects with context_buffer
 
 ---
 
-### 4. Processing Pipeline - LLM Processor
+### 5. Processing Pipeline - LLM Processor
 
 **Component:** `src/llm_processor.py`
 
@@ -275,7 +426,7 @@ def process_transcript(
 
 ---
 
-### 5. Processing Pipeline - Validator
+### 6. Processing Pipeline - Validator
 
 **Component:** `src/validator.py`
 
@@ -344,7 +495,7 @@ class ValidationResult:
 
 ---
 
-### 6. Processing Pipeline - Writer
+### 7. Processing Pipeline - Writer
 
 **Component:** `src/markdown_writer.py`
 
@@ -410,7 +561,7 @@ More content organized by concept...
 
 ---
 
-### 7. Utility - Cost Estimation
+### 8. Utility - Cost Estimation
 
 **Component:** `src/cost_estimator.py`
 
@@ -460,17 +611,34 @@ class CostBreakdown:
 
 ---
 
-### 8. Presentation Layer - Streamlit UI
+### 9. Presentation Layer - Streamlit UI
 
-**Component:** `app.py` (Phase 5, Phase 6 Enhanced)
+**Component:** `app.py` (Phase 5, Phase 6 Enhanced, Phase 7 With Pause/Resume)
 
 **Responsibilities:**
 - File upload and selection
 - Model and chunking configuration
 - Cost estimation and approval
 - Progress tracking during processing
+- Pause/Resume controls during processing
+- Auto-resume prompt on startup
 - Results preview and download
 - Error handling and reporting
+
+**Pause/Resume UI Features (Phase 7):**
+- **Resume Prompt:** Displays on startup if incomplete job found
+  - Shows job details (file, progress, failed chunks, costs)
+  - Provides "Resume" and "Start Fresh" options
+
+- **Pause/Resume Buttons:** Visible during active processing
+  - Pause button pauses processing after current chunk
+  - Resume button continues from saved state
+  - Disable buttons if no processing active
+
+- **Progress Display:** Real-time chunk-level progress
+  - Current/total chunks processed
+  - Progress percentage bar
+  - Status badges (processing, skipped, paused, completed)
 
 **Error Handling Wrapper (`safe_process`)**
 
@@ -567,6 +735,12 @@ Parser
 Chunker
   └── depends on: tiktoken, Parser
 
+State Manager
+  └── depends on: json, pathlib, filelock, dataclasses (built-in)
+
+Resumable Processor
+  └── depends on: threading (built-in), LLM Processor, State Manager
+
 LLM Processor
   └── depends on: Anthropic SDK, tenacity, base_prompt.txt, Chunker
 
@@ -580,12 +754,12 @@ Cost Estimator
   └── depends on: tiktoken (optional, with fallback)
 
 Streamlit UI
-  └── depends on: streamlit, all above modules
+  └── depends on: streamlit, all above modules, Resumable Processor
 ```
 
 ---
 
-## Error Handling Strategy (Phase 6 Enhanced)
+## Error Handling Strategy (Phase 7 Enhanced)
 
 ### Multi-Layer Error Handling
 
@@ -595,16 +769,32 @@ Streamlit UI
 - Retries on: RateLimitError, APIConnectionError, InternalServerError
 - Backoff: 1s → 2s → 4s → up to 10s
 
-**Layer 2: Integration Tests (test_integration.py)**
+**Layer 2: Resumable Processor State Recovery (Phase 7)**
+- Saves state after each chunk completes (checkpoint)
+- On fatal errors: state marked as "crashed", resumable on restart
+- On pause: state marked as "paused", resumes on user request
+- Distinguishes recoverable errors (logged) from fatal (re-raised)
+- Failed chunks tracked separately; user can review on resume
+
+**Layer 3: State Manager Corruption Recovery (Phase 7)**
+- Atomic writes prevent partial/corrupted state files
+- Backup file maintained for emergency recovery
+- File locking prevents concurrent access corruption
+- Thread-safe for multi-threaded operations
+
+**Layer 4: Integration Tests (test_integration.py + test_pause_resume.py)**
 - Tests error conditions: invalid format, empty files, malformed input
+- Tests pause/resume state transitions and recovery
+- Tests state file corruption and recovery mechanisms
 - Validates error handling behavior end-to-end
 - Ensures graceful degradation for edge cases
 
-**Layer 3: UI Error Wrapper (app.py - safe_process)**
+**Layer 5: UI Error Wrapper (app.py - safe_process)**
 - Wraps user-facing processing functions
 - Converts technical errors to user-friendly messages
 - Provides specific guidance for common failures
 - Shows debug details in expandable section
+- Integrates with resume prompt for incomplete jobs
 
 ### Error Hierarchy
 ```
@@ -664,7 +854,7 @@ Python/Anthropic Exceptions
 
 ---
 
-## Testing & Quality Assurance (Phase 6)
+## Testing & Quality Assurance (Phase 7)
 
 ### Unit Tests Coverage
 - **test_parser.py:** 3 tests (parser functionality)
@@ -673,7 +863,24 @@ Python/Anthropic Exceptions
 - **test_validator.py:** 17 tests (validation rules)
 - **test_writer.py:** 25 tests (markdown generation)
 - **test_cost_estimator.py:** 20 tests (token counting, pricing)
-- **Total:** 92 unit tests with 100% module coverage
+- **test_pause_resume.py:** 20 tests (pause/resume state management, Phase 7)
+- **Total:** 112 unit tests with 100% module coverage
+
+### Pause/Resume Tests (test_pause_resume.py - Phase 7)
+- **StateManager Tests:** 12 tests
+  - State creation and serialization
+  - Atomic writes and file locking
+  - Corruption recovery
+  - Thread safety
+  - State transitions (idle → processing → paused → completed/crashed)
+
+- **ResumableProcessor Tests:** 8 tests
+  - New job creation and state initialization
+  - Pause signal handling
+  - Resume from saved state
+  - Chunk skipping on resume
+  - Cost tracking (estimated vs actual)
+  - Error recovery and failed chunk handling
 
 ### Integration Tests (test_integration.py)
 - **TestFullPipeline:** 2 tests
@@ -687,7 +894,7 @@ Python/Anthropic Exceptions
 
 ### Test Execution
 ```bash
-# All tests (86 total)
+# All tests (117 total)
 pytest
 
 # Unit tests only
@@ -696,17 +903,23 @@ pytest tests/ --ignore=tests/test_integration.py
 # Integration tests only
 pytest tests/test_integration.py
 
+# Pause/resume tests only
+pytest tests/test_pause_resume.py -v
+
 # Specific module
 pytest tests/test_parser.py -v
 ```
 
 ## Scalability Considerations
 
-### Current Design (Phase 1-6 - MVP Complete)
+### Current Design (Phase 1-7 - MVP with Resilience)
 - Single-user, sequential processing
+- Pause/resume for interruption tolerance
 - Suitable for production MVP
 - Handles lectures up to 90 minutes
 - Estimated cost: $0.20-$0.60 per hour of video
+- State persistence enables recovery from failures
+- Chunk-level checkpoints minimize re-processing
 
 ### Future Enhancements
 - Batch processing for multiple files

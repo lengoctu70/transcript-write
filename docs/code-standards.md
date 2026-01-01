@@ -1,7 +1,7 @@
 # Code Standards & Architecture Guidelines
 
-**Version:** 1.1
-**Last Updated:** 2025-12-25
+**Version:** 1.2
+**Last Updated:** 2026-01-01
 **Applies To:** All Python code in src/, tests/, and app.py
 
 ---
@@ -33,22 +33,32 @@ src/
 ├── __init__.py
 ├── transcript_parser.py   # Input handling (SRT, VTT)
 ├── chunker.py             # Transcript segmentation
-├── llm_processor.py       # Claude API integration
+├── llm_processor.py       # Claude API integration (multi-provider)
+├── state_manager.py       # State persistence (Phase 7)
+├── resumable_processor.py # Pause/resume wrapper (Phase 7)
 ├── validator.py           # Output quality checks
-├── writer.py              # Markdown generation
-└── utils.py               # Shared utilities
+├── markdown_writer.py     # Markdown generation
+├── cost_estimator.py      # API cost estimation
+└── __init__.py
 
 prompts/
-└── base_prompt.txt     # Claude system prompt
+└── base_prompt.txt        # Claude system prompt
 
 tests/
 ├── __init__.py
-├── fixtures/           # Test data
+├── fixtures/              # Test data
 ├── test_parser.py
 ├── test_chunker.py
 ├── test_llm_processor.py
+├── test_state_manager.py
+├── test_pause_resume.py   # Phase 7 tests
 ├── test_validator.py
-└── test_writer.py
+├── test_writer.py
+├── test_cost_estimator.py
+└── test_integration.py
+
+output/
+└── .processing/           # State file storage (Phase 7)
 ```
 
 ### File Naming Convention
@@ -466,6 +476,142 @@ MAX_RETRIES = 3
 
 # File formats
 SUPPORTED_FORMATS = {'.srt', '.vtt', '.txt'}
+```
+
+---
+
+## State Management & Pause/Resume Patterns (Phase 7)
+
+### State Persistence
+- Use dataclasses for state representation: `@dataclass` with clear fields
+- Serialize to JSON for local storage: `json.dump()` / `json.load()`
+- Maintain version field for schema evolution: `version: str = "1.0"`
+- Include timestamps for audit trails: ISO format via `datetime.now(timezone.utc).isoformat()`
+
+**Example:**
+```python
+@dataclass
+class ProcessingState:
+    version: str                      # Schema version for compatibility
+    file_id: str                      # Unique identifier (hash-based)
+    status: str                       # State machine: idle|processing|paused|completed|crashed
+    completed_chunks: List[int]       # List of already-processed chunk indices
+    failed_chunks: Dict[str, str]     # {chunk_idx: error_message}
+    processed_results: List[Dict]     # Cache of results
+    started_at: str                   # ISO timestamp
+    last_updated: str                 # ISO timestamp
+
+    def to_dict(self) -> dict:
+        """For JSON serialization"""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'ProcessingState':
+        """For JSON deserialization"""
+        return cls(**data)
+```
+
+### Atomic File Operations
+- Use temporary files + atomic rename for data integrity
+- Implement file locking for concurrent access protection
+- Maintain backup copies for corruption recovery
+
+**Pattern:**
+```python
+@contextmanager
+def _atomic_write(self, filepath: Path):
+    """Safely write to file with atomic guarantee"""
+    temp_path = filepath.parent / f".{filepath.name}.tmp"
+    try:
+        with open(temp_path, 'w') as f:
+            yield f
+        # Atomic rename (os.replace is atomic on all platforms)
+        os.replace(temp_path, filepath)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+```
+
+### Thread Safety
+- Protect shared state with file locking: `filelock.FileLock`
+- Set timeout on lock acquisition: `timeout=10` seconds
+- Lock entire read-modify-write cycle
+
+**Pattern:**
+```python
+from filelock import FileLock
+
+def write_state(self, state: ProcessingState):
+    """Thread-safe state write"""
+    with FileLock(self.lock_file, timeout=10):
+        # Backup existing state
+        if self.state_file.exists():
+            self.state_file.rename(self.backup_file)
+        # Write atomically
+        with self._atomic_write(self.state_file) as f:
+            json.dump(state.to_dict(), f, indent=2)
+```
+
+### Pause/Resume Control Flow
+- Use `threading.Event` for pause signal: `self.pause_event.set()`
+- Check signal between expensive operations (chunks)
+- Distinguish recoverable errors from fatal ones
+- Save state before raising exceptions
+
+**Pattern:**
+```python
+def process_with_pause(self, chunks: List[Chunk]):
+    """Process chunks with pause capability"""
+    state = self.state_manager.read_state()
+
+    for chunk in chunks:
+        # Check pause signal
+        if self.pause_event.is_set():
+            state.status = "paused"
+            self.state_manager.write_state(state)
+            raise PauseRequested()
+
+        # Skip already-processed chunks
+        if chunk.index in state.completed_chunks:
+            continue
+
+        # Process chunk
+        try:
+            result = self.processor.process_chunk(chunk)
+            state.add_completed_chunk(result)
+            self.state_manager.write_state(state)  # Checkpoint
+        except RecoverableError as e:
+            state.add_failed_chunk(chunk.index, str(e))
+            self.state_manager.write_state(state)
+            continue  # Try next chunk
+        except FatalError:
+            state.status = "crashed"
+            self.state_manager.write_state(state)
+            raise
+```
+
+### Testing Pause/Resume
+- Mock file I/O: use `tmp_path` fixture
+- Test state transitions: idle → processing → paused → completed
+- Verify checkpoint integrity after each chunk
+- Simulate failures and verify recovery
+- Test concurrent access with threading
+
+**Example:**
+```python
+def test_pause_resume_roundtrip(tmp_state_dir):
+    """Test pause, save state, resume, complete flow"""
+    manager = StateManager(tmp_state_dir)
+
+    # Create initial state
+    state = manager.create_new_state("test.srt", "Test Video", 5, {})
+    state.add_completed_chunk(ProcessedChunk(...))
+    manager.write_state(state)
+
+    # Load state (resume)
+    loaded = manager.read_state()
+    assert loaded.completed_chunks == [0]
+    assert loaded.file_name == "test.srt"
 ```
 
 ---
