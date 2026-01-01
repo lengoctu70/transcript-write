@@ -6,6 +6,7 @@ venv/
 # Output
 output/*.md
 output/*.json
+output/.processing/
 
 # Python
 __pycache__/
