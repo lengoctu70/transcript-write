@@ -5,6 +5,8 @@ from .llm_processor import LLMProcessor, LLMProvider, ProcessedChunk, process_tr
 from .validator import OutputValidator, ValidationResult, ValidationSeverity
 from .markdown_writer import MarkdownWriter
 from .cost_estimator import CostEstimator, CostBreakdown
+from .state_manager import StateManager, ProcessingState
+from .resumable_processor import ResumableProcessor, PauseRequested, process_transcript_resumable
 
 __all__ = [
     "TranscriptParser",
@@ -21,4 +23,9 @@ __all__ = [
     "MarkdownWriter",
     "CostEstimator",
     "CostBreakdown",
+    "StateManager",
+    "ProcessingState",
+    "ResumableProcessor",
+    "PauseRequested",
+    "process_transcript_resumable",
 ]
